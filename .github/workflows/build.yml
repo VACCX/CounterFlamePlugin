@@ -54,7 +54,7 @@ jobs:
           ICAgICBkaXNwYXRjaF9hc3luYyhkaXNwYXRjaF9nZXRfbWFpbl9xdWV1ZSgpLCBeeyBj
           Zl9hdHRhY2goKTsgfSk7CiAgICAgICAgfQogICAgfSk7Cn0K
           B64EOF
-          base64 -d src.b64 > src/CFPlugin.m || base64 -D src.b64 > src/CFPlugin.m
+          base64 -d < src.b64 > src/CFPlugin.m || base64 -D < src.b64 > src/CFPlugin.m
           rm -f src.b64
           echo "=== source ==="
           wc -l src/CFPlugin.m
