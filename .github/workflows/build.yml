@@ -1,88 +1,69 @@
-name: Build CFPlugin v6
-
+name: Build CFPlugin v7
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
-
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Write source
+      - name: Decode source
         run: |
           mkdir -p src
-          cat > src/CFPlugin.m << 'EOF'
-#import <UIKit/UIKit.h>
-#import <Foundation/Foundation.h>
-#import <QuartzCore/QuartzCore.h>
-#include <dispatch/dispatch.h>
-#include <unistd.h>
-
-static UIView *g_overlay = nil;
-
-@interface CFOverlay : UIView
-@end
-@implementation CFOverlay
-- (instancetype)initWithFrame:(CGRect)f {
-    self = [super initWithFrame:f];
-    if (self) {
-        self.backgroundColor = [UIColor clearColor];
-        self.opaque = NO;
-        self.userInteractionEnabled = NO;
-    }
-    return self;
-}
-- (void)drawRect:(CGRect)r {
-    CGContextRef c = UIGraphicsGetCurrentContext();
-    if (!c) return;
-    NSString *txt = [NSString stringWithFormat:@"CF v6 | pid=%d", (int)getpid()];
-    NSDictionary *attrs = @{
-        NSFontAttributeName: [UIFont boldSystemFontOfSize:18],
-        NSForegroundColorAttributeName: [UIColor greenColor]
-    };
-    [txt drawAtPoint:CGPointMake(25, 110) withAttributes:attrs];
-}
-@end
-
-static void cf_attach(void) {
-    if (g_overlay) return;
-    UIWindow *win = nil;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    win = [UIApplication sharedApplication].keyWindow;
-#pragma clang diagnostic pop
-    if (!win) {
-        for (UIWindow *w in [UIApplication sharedApplication].windows) {
-            if (w.hidden == NO) { win = w; break; }
-        }
-    }
-    if (!win) return;
-    g_overlay = [[CFOverlay alloc] initWithFrame:win.bounds];
-    g_overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [win addSubview:g_overlay];
-    [win bringSubviewToFront:g_overlay];
-    CADisplayLink *link = [CADisplayLink displayLinkWithTarget:g_overlay selector:@selector(setNeedsDisplay)];
-    [link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-}
-
-__attribute__((constructor))
-static void cf_init(void) {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{
-        for (int i = 0; i < 60 && !g_overlay; i++) {
-            usleep(500000);
-            dispatch_async(dispatch_get_main_queue(), ^{ cf_attach(); });
-        }
-    });
-}
-EOF
-          echo "Source: $(wc -l < src/CFPlugin.m) lines"
-
+          cat > src.b64 << 'B64EOF'
+          I2ltcG9ydCA8VUlLaXQvVUlLaXQuaD4KI2ltcG9ydCA8Rm91bmRhdGlvbi9Gb3VuZGF0
+          aW9uLmg+CiNpbXBvcnQgPFF1YXJ0ekNvcmUvUXVhcnR6Q29yZS5oPgojaW5jbHVkZSA8
+          ZGlzcGF0Y2gvZGlzcGF0Y2guaD4KI2luY2x1ZGUgPHVuaXN0ZC5oPgoKc3RhdGljIFVJ
+          VmlldyAqZ19vdmVybGF5ID0gbmlsOwoKQGludGVyZmFjZSBDRk92ZXJsYXkgOiBVSVZp
+          ZXcKQGVuZApAaW1wbGVtZW50YXRpb24gQ0ZPdmVybGF5Ci0gKGluc3RhbmNldHlwZSlp
+          bml0V2l0aEZyYW1lOihDR1JlY3QpZiB7CiAgICBzZWxmID0gW3N1cGVyIGluaXRXaXRo
+          RnJhbWU6Zl07CiAgICBpZiAoc2VsZikgewogICAgICAgIHNlbGYuYmFja2dyb3VuZENv
+          bG9yID0gW1VJQ29sb3IgY2xlYXJDb2xvcl07CiAgICAgICAgc2VsZi5vcGFxdWUgPSBO
+          TzsKICAgICAgICBzZWxmLnVzZXJJbnRlcmFjdGlvbkVuYWJsZWQgPSBOTzsKICAgIH0K
+          ICAgIHJldHVybiBzZWxmOwp9Ci0gKHZvaWQpZHJhd1JlY3Q6KENHUmVjdClyIHsKICAg
+          IENHQ29udGV4dFJlZiBjID0gVUlHcmFwaGljc0dldEN1cnJlbnRDb250ZXh0KCk7CiAg
+          ICBpZiAoIWMpIHJldHVybjsKICAgIE5TU3RyaW5nICp0eHQgPSBbTlNTdHJpbmcgc3Ry
+          aW5nV2l0aEZvcm1hdDpAIkNGIHY3IHwgcGlkPSVkIiwgKGludClnZXRwaWQoKV07CiAg
+          ICBOU0RpY3Rpb25hcnkgKmF0dHJzID0gQHsKICAgICAgICBOU0ZvbnRBdHRyaWJ1dGVO
+          YW1lOiBbVUlGb250IGJvbGRTeXN0ZW1Gb250T2ZTaXplOjE4XSwKICAgICAgICBOU0Zv
+          cmVncm91bmRDb2xvckF0dHJpYnV0ZU5hbWU6IFtVSUNvbG9yIGdyZWVuQ29sb3JdCiAg
+          ICB9OwogICAgW3R4dCBkcmF3QXRQb2ludDpDR1BvaW50TWFrZSgyNSwgMTEwKSB3aXRo
+          QXR0cmlidXRlczphdHRyc107Cn0KQGVuZAoKc3RhdGljIHZvaWQgY2ZfYXR0YWNoKHZv
+          aWQpIHsKICAgIGlmIChnX292ZXJsYXkpIHJldHVybjsKICAgIFVJV2luZG93ICp3aW4g
+          PSBuaWw7CiNwcmFnbWEgY2xhbmcgZGlhZ25vc3RpYyBwdXNoCiNwcmFnbWEgY2xhbmcg
+          ZGlhZ25vc3RpYyBpZ25vcmVkICItV2RlcHJlY2F0ZWQtZGVjbGFyYXRpb25zIgogICAg
+          d2luID0gW1VJQXBwbGljYXRpb24gc2hhcmVkQXBwbGljYXRpb25dLmtleVdpbmRvdzsK
+          I3ByYWdtYSBjbGFuZyBkaWFnbm9zdGljIHBvcAogICAgaWYgKCF3aW4pIHsKICAgICAg
+          ICBmb3IgKFVJV2luZG93ICp3IGluIFtVSUFwcGxpY2F0aW9uIHNoYXJlZEFwcGxpY2F0
+          aW9uXS53aW5kb3dzKSB7CiAgICAgICAgICAgIGlmICh3LmhpZGRlbiA9PSBOTyB8fCB3
+          LmlzS2V5V2luZG93KSB7IHdpbiA9IHc7IGJyZWFrOyB9CiAgICAgICAgfQogICAgfQog
+          ICAgaWYgKCF3aW4pIHJldHVybjsKICAgIGdfb3ZlcmxheSA9IFtbQ0ZPdmVybGF5IGFs
+          bG9jXSBpbml0V2l0aEZyYW1lOndpbi5ib3VuZHNdOwogICAgZ19vdmVybGF5LmF1dG9y
+          ZXNpemluZ01hc2sgPSBVSVZpZXdBdXRvcmVzaXppbmdGbGV4aWJsZVdpZHRoIHwgVUlW
+          aWV3QXV0b3Jlc2l6aW5nRmxleGlibGVIZWlnaHQ7CiAgICBbd2luIGFkZFN1YnZpZXc6
+          Z19vdmVybGF5XTsKICAgIFt3aW4gYnJpbmdTdWJ2aWV3VG9Gcm9udDpnX292ZXJsYXld
+          OwogICAgQ0FEaXNwbGF5TGluayAqbGluayA9IFtDQURpc3BsYXlMaW5rIGRpc3BsYXlM
+          aW5rV2l0aFRhcmdldDpnX292ZXJsYXkgc2VsZWN0b3I6QHNlbGVjdG9yKHNldE5lZWRz
+          RGlzcGxheSldOwogICAgW2xpbmsgYWRkVG9SdW5Mb29wOltOU1J1bkxvb3AgbWFpblJ1
+          bkxvb3BdIGZvck1vZGU6TlNSdW5Mb29wQ29tbW9uTW9kZXNdOwp9CgpfX2F0dHJpYnV0
+          ZV9fKChjb25zdHJ1Y3RvcikpCnN0YXRpYyB2b2lkIGNmX2luaXQodm9pZCkgewogICAg
+          ZGlzcGF0Y2hfYWZ0ZXIoZGlzcGF0Y2hfdGltZShESVNQQVRDSF9USU1FX05PVywgMyAq
+          IE5TRUNfUEVSX1NFQyksCiAgICAgICAgICAgICAgICAgICBkaXNwYXRjaF9nZXRfbWFp
+          bl9xdWV1ZSgpLCBeewogICAgICAgIGZvciAoaW50IGkgPSAwOyBpIDwgNjAgJiYgIWdf
+          b3ZlcmxheTsgaSsrKSB7CiAgICAgICAgICAgIHVzbGVlcCg1MDAwMDApOwogICAgICAg
+          ICAgICBkaXNwYXRjaF9hc3luYyhkaXNwYXRjaF9nZXRfbWFpbl9xdWV1ZSgpLCBeeyBj
+          Zl9hdHRhY2goKTsgfSk7CiAgICAgICAgfQogICAgfSk7Cn0K
+          B64EOF
+          base64 -d src.b64 > src/CFPlugin.m || base64 -D src.b64 > src/CFPlugin.m
+          rm -f src.b64
+          echo "=== source ==="
+          wc -l src/CFPlugin.m
+          head -20 src/CFPlugin.m
       - name: Compile
         run: |
           set -x
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK=$SDK"
           xcrun --sdk iphoneos clang -dynamiclib -arch arm64 \
             -isysroot "$SDK" \
             -miphoneos-version-min=14.0 \
@@ -94,10 +75,9 @@ EOF
           ls -lh CFPlugin.dylib
           xcrun --sdk iphoneos otool -hv CFPlugin.dylib || true
           xcrun --sdk iphoneos otool -L CFPlugin.dylib || true
-
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: CFPlugin-v6
+          name: CFPlugin-v7
           path: CFPlugin.dylib
           retention-days: 30
