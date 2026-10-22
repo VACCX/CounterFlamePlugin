@@ -1,565 +1,112 @@
-name: Build CounterFlame Full Plugin
+name: Build CFPlugin
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Write Full Plugin Source
+      - name: Write source
         run: |
           mkdir -p src
-          cat > src/CFPlugin.m << 'CFEOF'
-          #import <UIKit/UIKit.h>
-          #import <QuartzCore/QuartzCore.h>
-          #import <objc/runtime.h>
-          #import <dlfcn.h>
-          #import <mach/mach.h>
-          #include <math.h>
-          #include <stdarg.h>
-          #include <unistd.h>
+          cat > src/CFPlugin.m << 'EOF'
+#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+#include <unistd.h>
 
-          /* ====================== CONFIG ====================== */
-          #define CF_MAX_PLAYERS 64
+static UIView *g_overlay = nil;
 
-          typedef struct {
-              float world[3], screen[3], headScreen[3];
-              float health, maxHealth, distance;
-              int team, local, visible, dead, valid;
-              char name[32];
-          } CFPlayer;
+@interface CFOverlay : UIView
+@end
+@implementation CFOverlay
+- (instancetype)initWithFrame:(CGRect)f {
+    self = [super initWithFrame:f];
+    if (self) {
+        self.backgroundColor = [UIColor clearColor];
+        self.opaque = NO;
+        self.userInteractionEnabled = NO;
+    }
+    return self;
+}
+- (void)drawRect:(CGRect)r {
+    CGContextRef c = UIGraphicsGetCurrentContext();
+    if (!c) return;
+    // Red semi-transparent rect to confirm drawing works
+    CGContextSetRGBFillColor(c, 1.0, 0.0, 0.0, 0.3);
+    CGContextFillRect(c, CGRectMake(20, 100, 200, 50));
+    // Text
+    NSString *txt = [NSString stringWithFormat:@"CF v5 | pid=%d", (int)getpid()];
+    [txt drawAtPoint:CGPointMake(25, 110)
+      withAttributes:@{
+          NSFontAttributeName:[UIFont boldSystemFontOfSize:18],
+          NSForegroundColorAttributeName:[UIColor greenColor]
+      }];
+}
+@end
 
-          typedef struct {
-              int enabled;
-              int espBox, espHealth, espSnapline, espName, espDist, espHead, espCorner;
-              int espTeamCheck, espVisibleCheck;
-              float espMaxDist;
-              int espColEnemy[4], espColTeam[4], espColVis[4], espColHid[4];
-              int aimEnabled, aimFOV, aimBone, aimKey, aimSmooth, aimVisCheck, aimTeamCheck;
-              int noRecoil, noSpread, noSpreadFactor;
-              int rapidFire, rapidFireDelayMS, rapidFireBurst;
-              int autoFire, autoFireFOV, autoFireDelayMS, autoFireKey;
-              int bunnyHop, bunnyHopKey, bunnyHopDelayMS;
-              int wallHack, wallHackKey;
-              int noClip, noClipKey;
-              int menuKey;
-              int menuOpen;
-          } CFConfig;
+void cf_attach(void) {
+    if (g_overlay) return;
+    UIWindow *win = nil;
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    win = [UIApplication sharedApplication].keyWindow;
+    #pragma clang diagnostic pop
+    if (!win) {
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            if (w.hidden == NO) { win = w; break; }
+        }
+    }
+    if (!win) {
+        NSLog(@"[CF] no window");
+        return;
+    }
+    NSLog(@"[CF] window=%@", win);
+    g_overlay = [[CFOverlay alloc] initWithFrame:win.bounds];
+    g_overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [win addSubview:g_overlay];
+    [win bringSubviewToFront:g_overlay];
+    CADisplayLink *link = [CADisplayLink displayLinkWithTarget:g_overlay selector:@selector(setNeedsDisplay)];
+    [link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    NSLog(@"[CF] attached OK");
+}
 
-          static CFPlayer  g_players[CF_MAX_PLAYERS];
-          static int       g_playerCount;
-          static CFConfig  g_cfg;
-          static UIView   *g_overlay;
-          static CADisplayLink *g_link;
-          static UIWindow *g_menuWin;
-
-          static void cf_log(NSString *fmt, ...) __attribute__((format(__NSString__,1,2)));
-          static void cf_log(NSString *fmt, ...) {
-              va_list ap; va_start(ap, fmt);
-              NSLog(@"[CF] %@", [[NSString alloc] initWithFormat:fmt arguments:ap]);
-              va_end(ap);
-          }
-
-          /* ====================== IL2CPP HELPERS ====================== */
-          /* These get the correct offset at runtime by scanning metadata */
-          static int64_t cf_patch(int64_t addr, const uint8_t *bytes, int len) {
-              if (addr <= 0) return -1;
-              kern_return_t kr = vm_protect(mach_task_self(), (vm_address_t)addr, len, 0, VM_PROT_READ | VM_PROT_WRITE);
-              if (kr != KERN_SUCCESS) { cf_log(@"vm_protect fail @ 0x%llX kr=%d", addr, kr); return -1; }
-              memcpy((void *)addr, bytes, len);
-              vm_protect(mach_task_self(), (vm_address_t)addr, len, 0, VM_PROT_READ | VM_PROT_EXECUTE);
-              return 0;
-          }
-          static int64_t cf_patch_ret(int64_t addr) {
-              uint8_t r[] = {0xC0, 0x03, 0x5F, 0xD6}; // ARM64 RET
-              return cf_patch(addr, r, 4);
-          }
-          static int64_t cf_patch_mov_w0_0(int64_t addr) {
-              uint8_t b[] = {0x00, 0x00, 0x80, 0x52, 0xC0, 0x03, 0x5F, 0xD6}; // mov w0,#0; ret
-              return cf_patch(addr, b, 8);
-          }
-          static int64_t cf_patch_mov_w0_1(int64_t addr) {
-              uint8_t b[] = {0x20, 0x00, 0x80, 0x52, 0xC0, 0x03, 0x5F, 0xD6}; // mov w0,#1; ret
-              return cf_patch(addr, b, 8);
-          }
-          static int64_t cf_patch_nop(int64_t addr, int count) {
-              for (int i=0;i<count;i++) { uint8_t n[]={0x1F,0x20,0x03,0xD5}; cf_patch(addr+i*4,n,4); }
-              return 0;
-          }
-
-          /* ====================== HOOK ENGINE ====================== */
-          static void cf_hook(int64_t addr, void *detour, void **orig) {
-              if (addr <= 0) return;
-              vm_protect(mach_task_self(), (vm_address_t)addr, 16, 0, VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE);
-              /* Save original first 4 insns */
-              if (orig) memcpy(*orig, (void *)addr, 16);
-              /* Write trampoline: LDR X16, #8; BR X16; <target> */
-              uint32_t tramp[4];
-              tramp[0] = 0x58000050; // LDR X16, #8
-              tramp[1] = 0xD61F0200; // BR  X16
-              tramp[2] = (uint32_t)(((uint64_t)detour) & 0xFFFFFFFF);
-              tramp[3] = (uint32_t)(((uint64_t)detour) >> 32);
-              memcpy((void *)addr, tramp, 16);
-          }
-
-          /* ====================== IL2CPP FUNCTION RESOLVER ====================== */
-          /* Walk global-metadata.dat to find function addresses at runtime */
-          static int64_t cf_dlsym_il2cpp(const char *name) {
-              /* Try dlsym first for UnityPlayer-loaded symbols */
-              void *h = dlopen(NULL, RTLD_NOLOAD);
-              if (h) {
-                  void *s = dlsym(h, name);
-                  if (s) return (int64_t)s;
-              }
-              /* Scan all loaded mach-o images for the symbol */
-              for (uint32_t i=0; i<_dyld_image_count(); i++) {
-                  const char *ip = _dyld_get_image_name(i);
-                  if (!ip) continue;
-                  void *s = dlsym((void*)_dyld_get_image_header(i), name);
-                  if (s) return (int64_t)s;
-              }
-              return 0;
-          }
-
-          /* ====================== STATE ====================== */
-          static int g_spread_hooked, g_recoil_hooked, g_rapidfire_hooked;
-          static int g_autofire_hooked, g_wallhack_hooked;
-          static int64_t g_fn_GetKey, g_fn_GetAxis, g_fn_Fire, g_fn_Shoot;
-          static int64_t g_fn_GetSpread, g_fn_GetRecoil, g_fn_LineTrace;
-
-          typedef void* (*get_key_t)(void*,int);
-          typedef int   (*line_trace_t)(void*,float*,float*,int,void*);
-          typedef float (*get_spread_t)(void*);
-          typedef void  (*shoot_t)(void*,int);
-
-          static get_key_t    orig_GetKey;
-          static line_trace_t orig_LineTrace;
-          static get_spread_t orig_GetSpread;
-          static shoot_t      orig_Shoot, orig_Fire;
-
-          /* ====================== HIT VECTORS ====================== */
-          typedef struct { int64_t *fns; int count; } CFVTable;
-          static CFVTable* cf_find_vtable(const char *className) {
-              /* Walk ObjC or Il2cpp class list to find vtable */
-              /* Placeholder - will be populated at runtime */
-              cf_log(@"vtable lookup for %s (not yet implemented)", className);
-              return NULL;
-          }
-
-          /* ====================== AUTO-RESOLVE OFFSETS ====================== */
-          static void cf_resolve_il2cpp(void) {
-              /* Unity standard IL2CPP exports */
-              g_fn_GetKey   = cf_dlsym_il2cpp("il2cpp_input_get_key");
-              g_fn_GetAxis  = cf_dlsym_il2cpp("il2cpp_input_get_axis");
-              cf_log(@"resolved: GetKey=0x%llX GetAxis=0x%llX", g_fn_GetKey, g_fn_GetAxis);
-
-              /* Try common Unity function patterns */
-              void *h = dlopen(NULL, RTLD_NOLOAD);
-              if (!h) h = dlopen("UnityFramework", RTLD_NOLOAD);
-              if (h) {
-                  g_fn_Shoot     = (int64_t)dlsym(h, "Player_Shoot_m1234567");
-                  g_fn_Fire      = (int64_t)dlsym(h, "Weapon_Fire_m1234567");
-                  g_fn_GetSpread = (int64_t)dlsym(h, "Weapon_GetSpread_m1234567");
-                  g_fn_GetRecoil = (int64_t)dlsym(h, "Weapon_GetRecoil_m1234567");
-                  g_fn_LineTrace = (int64_t)dlsym(h, "Physics_LineTrace_m1234567");
-                  dlclose(h);
-              }
-              cf_log(@"resolved IL2CPP fns: Shoot=0x%llX Fire=0x%llX Spread=0x%llX Recoil=0x%llX LineTrace=0x%llX",
-                     g_fn_Shoot, g_fn_Fire, g_fn_GetSpread, g_fn_GetRecoil, g_fn_LineTrace);
-          }
-
-          /* ====================== PLAYER GATHERING ====================== */
-          static void cf_gather(void) {
-              g_playerCount = 0;
-              /* TODO: read player list from IL2CPP memory */
-              /* Placeholder: add a dummy player for UI testing */
-              g_players[0] = (CFPlayer){
-                  .world={1,2,3}, .screen={100,200,1}, .headScreen={100,170,1},
-                  .health=75, .maxHealth=100, .distance=15.5,
-                  .team=2, .local=0, .visible=1, .dead=0, .valid=1,
-                  .name="EnemyPlayer"
-              };
-              g_playerCount = 1;
-          }
-
-          /* ====================== DRAW HELPERS ====================== */
-          static void cf_color(CGContextRef ctx, int c[4], int stroke) {
-              CGFloat R=c[0]/255.f,G=c[1]/255.f,B=c[2]/255.f,A=c[3]/255.f;
-              stroke ? CGContextSetRGBStrokeColor(ctx,R,G,B,A) : CGContextSetRGBFillColor(ctx,R,G,B,A);
-          }
-          static void cf_box(CGRect r, float t, int col[4]) {
-              CGContextRef c=UIGraphicsGetCurrentContext(); if(!c)return;
-              cf_color(c,col,1); CGContextSetLineWidth(c,t); CGContextStrokeRect(c,r);
-          }
-          static void cf_cornerBox(CGRect r, float t, int col[4]) {
-              float L=fminf(r.size.width,r.size.height)*0.25f; if(L>30)L=30;
-              CGContextRef c=UIGraphicsGetCurrentContext(); if(!c)return;
-              cf_color(c,col,1); CGContextSetLineWidth(c,t);
-              float x=r.origin.x,y=r.origin.y,w=r.size.width,h=r.size.height;
-              CGContextBeginPath(c);
-              CGContextMoveToPoint(c,x,y+L);CGContextAddLineToPoint(c,x,y);CGContextAddLineToPoint(c,x+L,y);
-              CGContextMoveToPoint(c,x+w-L,y);CGContextAddLineToPoint(c,x+w,y);CGContextAddLineToPoint(c,x+w,y+L);
-              CGContextMoveToPoint(c,x,y+h-L);CGContextAddLineToPoint(c,x,y+h);CGContextAddLineToPoint(c,x+L,y+h);
-              CGContextMoveToPoint(c,x+w-L,y+h);CGContextAddLineToPoint(c,x+w,y+h);CGContextAddLineToPoint(c,x+w,y+h-L);
-              CGContextStrokePath(c);
-          }
-          static void cf_line(CGPoint a, CGPoint b, float t, int col[4]) {
-              CGContextRef c=UIGraphicsGetCurrentContext(); if(!c)return;
-              cf_color(c,col,1); CGContextSetLineWidth(c,t);
-              CGContextMoveToPoint(c,a.x,a.y); CGContextAddLineToPoint(c,b.x,b.y); CGContextStrokePath(c);
-          }
-          static void cf_label(NSString *s, CGPoint p, float sz, int col[4]) {
-              UIFont *f=[UIFont boldSystemFontOfSize:12*sz];
-              UIColor *u=[UIColor colorWithRed:col[0]/255.f green:col[1]/255.f blue:col[2]/255.f alpha:col[3]/255.f];
-              [s drawAtPoint:p withAttributes:@{NSFontAttributeName:f, NSForegroundColorAttributeName:u}];
-          }
-          static void cf_hpbar(CGRect r, float hp, float max) {
-              CGContextRef c=UIGraphicsGetCurrentContext(); if(!c)return;
-              float R=max>0?hp/max:0; if(R<0)R=0; if(R>1)R=1;
-              CGContextSetRGBFillColor(c,0,0,0,0.5f); CGContextFillRect(c,CGRectInset(r,-1,-1));
-              float red=R<0.5?1:(1-R)*2, green=R>0.5?1:R*2;
-              CGContextSetRGBFillColor(c,red,green,0,0.9f);
-              CGContextFillRect(c,CGRectMake(r.origin.x,r.origin.y+r.size.height*(1-R),r.size.width,r.size.height*R));
-          }
-          static void cf_headCircle(CGPoint ctr, float R, int col[4]) {
-              CGContextRef ctx=UIGraphicsGetCurrentContext(); if(!ctx)return;
-              cf_color(ctx,col,1); CGContextSetLineWidth(ctx,1.5f);
-              CGContextStrokeEllipseInRect(ctx,CGRectMake(ctr.x-R,ctr.y-R,R*2,R*2));
-          }
-
-          /* ====================== ESP RENDER ====================== */
-          static void cf_renderESP(void) {
-              CGSize ss=[UIScreen mainScreen].bounds.size;
-              for (int i=0; i<g_playerCount && i<CF_MAX_PLAYERS; i++) {
-                  CFPlayer *p=&g_players[i];
-                  if (!p->valid || p->dead || p->local) continue;
-                  if (g_cfg.espTeamCheck && p->team == 0) continue;
-                  if (g_cfg.espVisibleCheck && !p->visible) continue;
-                  if (p->screen[2] <= 0 || p->distance > g_cfg.espMaxDist) continue;
-
-                  float w=60.f/p->distance, h=w*2;
-                  if (w<18) w=18; if (h<40) h=40;
-                  CGRect box=CGRectMake(p->screen[0]-w/2, p->screen[1]-h, w, h);
-                  int *col = g_cfg.espColEnemy;
-                  if (g_cfg.espVisibleCheck) col=p->visible?g_cfg.espColVis:g_cfg.espColHid;
-
-                  if (g_cfg.espBox) {
-                      if (g_cfg.espCorner) cf_cornerBox(box, 1.5f, col);
-                      else cf_box(box, 1.5f, col);
-                  }
-                  if (g_cfg.espHealth) cf_hpbar(CGRectMake(box.origin.x-6, box.origin.y, 3, h), p->health, p->maxHealth);
-                  if (g_cfg.espSnapline) cf_line(CGPointMake(p->screen[0], p->screen[1]), CGPointMake(ss.width/2, ss.height), 1, col);
-                  if (g_cfg.espHead && p->headScreen[2]>0) cf_headCircle(CGPointMake(p->headScreen[0], p->headScreen[1]), w*.3f, col);
-                  if (g_cfg.espName || g_cfg.espDist) {
-                      NSString *lbl=nil;
-                      if (g_cfg.espName && g_cfg.espDist) lbl=[NSString stringWithFormat:@"%s [%.0fm]", p->name, p->distance];
-                      else if (g_cfg.espName) lbl=[NSString stringWithUTF8String:p->name];
-                      else lbl=[NSString stringWithFormat:@"%.0fm",p->distance];
-                      cf_label(lbl, CGPointMake(p->screen[0], box.origin.y-14), 1, col);
-                  }
-              }
-              /* Crosshair */
-              int g[]={0,255,100,220};
-              cf_line(CGPointMake(ss.width/2-12,ss.height/2),CGPointMake(ss.width/2-4,ss.height/2),1,g);
-              cf_line(CGPointMake(ss.width/2+4,ss.height/2),CGPointMake(ss.width/2+12,ss.height/2),1,g);
-              cf_line(CGPointMake(ss.width/2,ss.height/2-12),CGPointMake(ss.width/2,ss.height/2-4),1,g);
-              cf_line(CGPointMake(ss.width/2,ss.height/2+4),CGPointMake(ss.width/2,ss.height/2+12),1,g);
-              /* Status HUD */
-              int w[]={255,255,255,220};
-              cf_label([NSString stringWithFormat:@"CFPlugin | 玩家:%d",g_playerCount], CGPointMake(16,24), 1, w);
-
-              /* Feature status */
-              NSMutableString *st=[NSMutableString string];
-              [st appendFormat:@"ESP:%s | ",g_cfg.enabled?"开":"关"];
-              [st appendFormat:@"无扩散:%s | ",g_cfg.noSpread?"开":"关"];
-              [st appendFormat:@"连跳:%s | ",g_cfg.bunnyHop?"开":"关"];
-              [st appendFormat:@"快速射击:%s | ",g_cfg.rapidFire?"开":"关"];
-              [st appendFormat:@"自动开火:%s | ",g_cfg.autoFire?"开":"关"];
-              [st appendFormat:@"穿墙:%s",g_cfg.wallHack?"开":"关"];
-              cf_label(st, CGPointMake(16, 40), 0.9, w);
-          }
-
-          /* ====================== OVERLAY VIEW ====================== */
-          @interface CFOverlay : UIView @end
-          @implementation CFOverlay
-          - (instancetype)initWithFrame:(CGRect)f {
-              if ((self=[super initWithFrame:f])) {
-                  self.backgroundColor=[UIColor clearColor];
-                  self.opaque=NO; self.userInteractionEnabled=NO;
-              }
-              return self;
-          }
-          - (void)drawRect:(CGRect)r {
-              if (!g_cfg.enabled) return;
-              cf_gather();
-              cf_renderESP();
-          }
-          @end
-
-          /* ====================== IN-GAME MENU ====================== */
-          @interface CFMenuVC : UIViewController <UITableViewDelegate, UITableViewDataSource>
-          @property (nonatomic, strong) UITableView *table;
-          @property (nonatomic, strong) NSArray *items;
-          @end
-          @implementation CFMenuVC
-          - (void)viewDidLoad {
-              [super viewDidLoad];
-              self.view.backgroundColor=[UIColor colorWithWhite:0.05 alpha:0.92];
-              self.table=[[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleGrouped];
-              self.table.backgroundColor=[UIColor clearColor];
-              self.table.delegate=self; self.table.dataSource=self;
-              self.table.separatorColor=[UIColor colorWithWhite:0.3 alpha:1];
-              [self.view addSubview:self.table];
-
-              UIButton *close=[UIButton buttonWithType:UIButtonTypeSystem];
-              [close setTitle:@"关闭菜单 (ESC)" forState:UIControlStateNormal];
-              close.titleLabel.font=[UIFont boldSystemFontOfSize:16];
-              [close setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-              close.backgroundColor=[UIColor colorWithRed:0.8 green:0.2 blue:0.2 alpha:1];
-              close.frame=CGRectMake(0,0,self.view.bounds.size.width,50);
-              close.autoresizingMask=UIViewAutoresizingFlexibleWidth;
-              [close addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
-              self.table.tableHeaderView=close;
-
-              [self buildItems];
-          }
-          - (void)buildItems {
-              self.items = @[
-                  @{@"title":@"========== ESP 绘制 ==========", @"type":@"header"},
-                  @{@"title":@"启用 ESP", @"key":@"enabled"},
-                  @{@"title":@"方框", @"key":@"espBox"},
-                  @{@"title":@"骨骼线", @"key":@"espSnapline"},
-                  @{@"title":@"血量条", @"key":@"espHealth"},
-                  @{@"title":@"玩家名", @"key":@"espName"},
-                  @{@"title":@"距离", @"key":@"espDist"},
-                  @{@"title":@"头部圆圈", @"key":@"espHead"},
-                  @{@"title":@"角框模式", @"key":@"espCorner"},
-                  @{@"title":@"========== 战斗功能 ==========", @"type":@"header"},
-                  @{@"title":@"无扩散 (NoSpread)", @"key":@"noSpread"},
-                  @{@"title":@"连跳 (BunnyHop)", @"key":@"bunnyHop"},
-                  @{@"title":@"快速射击 (RapidFire)", @"key":@"rapidFire"},
-                  @{@"title":@"自动开火 (AutoFire)", @"key":@"autoFire"},
-                  @{@"title":@"穿墙 (WallHack)", @"key":@"wallHack"},
-                  @{@"title":@"========== 自瞄 ==========", @"type":@"header"},
-                  @{@"title":@"自动瞄准", @"key":@"aimEnabled"},
-              ];
-              [self.table reloadData];
-          }
-          - (NSInteger)numberOfSectionsInTableView:(UITableView *)tv { return 1; }
-          - (NSInteger)tableView:(UITableView *)tv numberOfRowsInSection:(NSInteger)s { return self.items.count; }
-          - (UITableViewCell *)tableView:(UITableView *)tv cellForRowAtIndexPath:(NSIndexPath *)ip {
-              UITableViewCell *cell=[tv dequeueReusableCellWithIdentifier:@"c"];
-              if (!cell) {
-                  cell=[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"c"];
-                  cell.backgroundColor=[UIColor colorWithWhite:0.12 alpha:1];
-                  cell.textLabel.textColor=[UIColor whiteColor];
-                  cell.textLabel.font=[UIFont systemFontOfSize:14];
-              }
-              NSDictionary *it=self.items[ip.row];
-              cell.textLabel.text=it[@"title"];
-              NSString *tp=it[@"type"];
-              if ([tp isEqual:@"header"]) {
-                  cell.textLabel.textColor=[UIColor cyanColor];
-                  cell.accessoryView=nil;
-                  cell.selectionStyle=UITableViewCellSelectionStyleNone;
-                  return cell;
-              }
-              NSString *key=it[@"key"];
-              int *val=(int*)((uint8_t*)&g_cfg + cf_offsetForKey(key));
-              UISwitch *sw=[[UISwitch alloc] init];
-              sw.on=*val != 0;
-              sw.tag=(NSInteger)((uint8_t*)val - (uint8_t*)&g_cfg);
-              [sw addTarget:self action:@selector(toggleSwitch:) forControlEvents:UIControlEventValueChanged];
-              cell.accessoryView=sw;
-              cell.selectionStyle=UITableViewCellSelectionStyleNone;
-              return cell;
-          }
-          - (void)toggleSwitch:(UISwitch *)sw {
-              int *ptr=(int*)((uint8_t*)&g_cfg + sw.tag);
-              *ptr = sw.on ? 1 : 0;
-              cf_log(@"toggle offset %ld = %d", (long)sw.tag, *ptr);
-          }
-          - (void)closeMenu {
-              g_cfg.menuOpen=0;
-              if (g_menuWin) { [g_menuWin setHidden:YES]; g_menuWin=nil; }
-              [self dismissViewControllerAnimated:YES completion:nil];
-          }
-          - (CGFloat)tableView:(UITableView *)tv heightForRowAtIndexPath:(NSIndexPath *)ip {
-              return 44;
-          }
-
-          /* Offset helper */
-          static ptrdiff_t cf_offsetForKey(NSString *key) {
-              if ([key isEqual:@"enabled"])    return offsetof(CFConfig, enabled);
-              if ([key isEqual:@"espBox"])     return offsetof(CFConfig, espBox);
-              if ([key isEqual:@"espSnapline"])return offsetof(CFConfig, espSnapline);
-              if ([key isEqual:@"espHealth"])  return offsetof(CFConfig, espHealth);
-              if ([key isEqual:@"espName"])    return offsetof(CFConfig, espName);
-              if ([key isEqual:@"espDist"])    return offsetof(CFConfig, espDist);
-              if ([key isEqual:@"espHead"])    return offsetof(CFConfig, espHead);
-              if ([key isEqual:@"espCorner"])  return offsetof(CFConfig, espCorner);
-              if ([key isEqual:@"noSpread"])   return offsetof(CFConfig, noSpread);
-              if ([key isEqual:@"noRecoil"])   return offsetof(CFConfig, noRecoil);
-              if ([key isEqual:@"bunnyHop"])   return offsetof(CFConfig, bunnyHop);
-              if ([key isEqual:@"rapidFire"])  return offsetof(CFConfig, rapidFire);
-              if ([key isEqual:@"autoFire"])   return offsetof(CFConfig, autoFire);
-              if ([key isEqual:@"wallHack"])   return offsetof(CFConfig, wallHack);
-              if ([key isEqual:@"aimEnabled"]) return offsetof(CFConfig, aimEnabled);
-              return 0;
-          }
-          @end
-
-          static void cf_showMenu(void) {
-              if (g_cfg.menuOpen) return;
-              g_cfg.menuOpen=1;
-              CFMenuVC *vc=[[CFMenuVC alloc] init];
-              UIViewController *root=[UIApplication sharedApplication].keyWindow.rootViewController;
-              if (!root) root=[[[UIApplication sharedApplication] windows] firstObject].rootViewController;
-              if (!root) return;
-              UIViewController *top=root;
-              while (top.presentedViewController) top=top.presentedViewController;
-              [top presentViewController:vc animated:YES completion:nil];
-          }
-
-          /* ====================== FEATURE IMPLEMENTATIONS ====================== */
-          static void cf_noSpread_hook(void *weapon, float *out) {
-              if (g_cfg.noSpread && out) *out=0;
-              else if (orig_GetSpread) *out=orig_GetSpread(weapon);
-          }
-          static void cf_fire_hook(void *player, int mode) {
-              if (g_cfg.rapidFire && orig_Fire) {
-                  for (int i=0; i<3; i++) orig_Fire(player, mode);
-              } else if (orig_Fire) orig_Fire(player, mode);
-          }
-          static int cf_wallhack_hook(void *world, float *start, float *end, int mask, void *ignored) {
-              if (g_cfg.wallHack) {
-                  /* Make line trace always return non-blocked */
-                  return 0;
-              }
-              return orig_LineTrace ? orig_LineTrace(world, start, end, mask, ignored) : 0;
-          }
-
-          /* ====================== KEY INPUT MONITOR ====================== */
-          static void cf_checkKeys(void) {
-              /* Simulate keyboard input monitoring via touch gesture */
-              /* In real implementation, hook Input.GetKey / Input.GetKeyDown */
-              /* For now, menu toggle via 3-finger double-tap detection */
-          }
-
-          /* ====================== ATTACH ====================== */
-          static void cf_attach(void) {
-              if (g_overlay) return;
-              UIWindow *win=[UIApplication sharedApplication].keyWindow;
-              if (!win) {
-                  for (UIWindow *w in [[UIApplication sharedApplication] windows]) { win=w; break; }
-              }
-              if (!win) {
-                  id scene=[[[UIApplication sharedApplication] connectedScenes] anyObject];
-                  if (scene && [scene respondsToSelector:@selector(keyWindow)])
-                      win=[scene performSelector:@selector(keyWindow)];
-              }
-              if (!win) { cf_log(@"attach: no window"); return; }
-              cf_log(@"window=%@ root=%@ size=%@", win, win.rootViewController, NSStringFromCGSize(win.bounds.size));
-
-              g_overlay=[[CFOverlay alloc] initWithFrame:win.bounds];
-              g_overlay.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
-              [win addSubview:g_overlay];
-              [win bringSubviewToFront:g_overlay];
-
-              id drv=[[NSClassFromString(@"CFDriver") alloc] init];
-              if (drv && [drv respondsToSelector:@selector(tick)]) {
-                  g_link=[CADisplayLink displayLinkWithTarget:drv selector:@selector(tick)];
-              } else {
-                  g_link=[CADisplayLink displayLinkWithTarget:g_overlay selector:@selector(setNeedsDisplay)];
-              }
-              [g_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-              cf_log(@"overlay OK");
-
-              /* Resolve and patch IL2CPP */
-              cf_resolve_il2cpp();
-
-              /* Add menu toggle button on screen */
-              UIButton *menuBtn=[UIButton buttonWithType:UIButtonTypeSystem];
-              menuBtn.frame=CGRectMake(win.bounds.size.width-50, 80, 44, 44);
-              [menuBtn setTitle:@"⚙" forState:UIControlStateNormal];
-              menuBtn.titleLabel.font=[UIFont systemFontOfSize:28];
-              [menuBtn addTarget:[[CFMenuBtnTarget alloc] init] action:@selector(onMenuTap) forControlEvents:UIControlEventTouchUpInside];
-              [win addSubview:menuBtn];
-          }
-
-          @interface CFMenuBtnTarget : NSObject @end
-          @implementation CFMenuBtnTarget
-          - (void)onMenuTap { cf_showMenu(); }
-          @end
-
-          @interface CFDriver : NSObject @end
-          @implementation CFDriver
-          - (void)tick { if (g_overlay) [g_overlay setNeedsDisplay]; }
-          @end
-
-          static void cf_poll(int attempt) {
-              cf_attach();
-              if (g_overlay || attempt > 120) {
-                  if (!g_overlay) cf_log(@"GAVE UP after %d attempts", attempt);
-                  return;
-              }
-              dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5*NSEC_PER_SEC)),
-                             dispatch_get_main_queue(), ^{ cf_poll(attempt+1); });
-          }
-
-          /* ====== ENTRY POINT: +load (runs when dylib is loaded) ====== */
-          @interface CFPluginLoader : NSObject @end
-          @implementation CFPluginLoader
-          + (void)load {
-              /* Init config with defaults */
-              g_cfg = (CFConfig){
-                  .enabled=1, .espBox=1, .espHealth=1, .espSnapline=1, .espName=1,
-                  .espDist=1, .espHead=1, .espCorner=1, .espTeamCheck=1, .espVisibleCheck=1,
-                  .espMaxDist=300.f,
-                  .espColEnemy={255,40,40,255}, .espColTeam={40,255,40,255},
-                  .espColVis={255,255,0,255}, .espColHid={150,0,0,255},
-                  .aimEnabled=0, .aimFOV=90, .aimBone=0, .aimKey=0, .aimSmooth=5,
-                  .aimVisCheck=1, .aimTeamCheck=1,
-                  .noRecoil=0, .noSpread=1, .noSpreadFactor=0,
-                  .rapidFire=1, .rapidFireDelayMS=30, .rapidFireBurst=3,
-                  .autoFire=1, .autoFireFOV=90, .autoFireDelayMS=50, .autoFireKey=0,
-                  .bunnyHop=1, .bunnyHopKey=0, .bunnyHopDelayMS=10,
-                  .wallHack=0, .wallHackKey=0, .noClip=0, .noClipKey=0,
-                  .menuKey=0, .menuOpen=0
-              };
-              cf_log(@"CFPlugin v3 +load pid=%d", (int)getpid());
-              dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4*NSEC_PER_SEC)),
-                             dispatch_get_main_queue(), ^{ cf_poll(0); });
-          }
-          @end
-          CFEOF
-          echo "Source written: $(wc -l < src/CFPlugin.m) lines"
+@interface CFLoader : NSObject
+@end
+@implementation CFLoader
++ (void)load {
+    NSLog(@"[CF] +load pid=%d", (int)getpid());
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{
+        cf_attach();
+        if (!g_overlay) {
+            // Retry
+            for (int i = 0; i < 60 && !g_overlay; i++) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC) * (i+1)),
+                               dispatch_get_main_queue(), ^{ cf_attach(); });
+            }
+        }
+    });
+}
+@end
+EOF
+          echo "Source written:  lines"
 
       - name: Compile dylib
         run: |
           set -e
-          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK: $SDK"
-          xcrun --sdk iphoneos clang -dynamiclib -arch arm64 -isysroot "$SDK" \
-            -miphoneos-version-min=14.0 \
-            -fobjc-arc -O2 -Wno-everything \
-            -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore \
-            -install_name @executable_path/CFPlugin.dylib \
-            -o CFPlugin.dylib src/CFPlugin.m
-          ldid -S CFPlugin.dylib || codesign -f -s - CFPlugin.dylib || true
+          SDK=
+          xcrun --sdk iphoneos clang -dynamiclib -arch arm64             -isysroot ""             -miphoneos-version-min=14.0             -fobjc-arc -O2             -framework UIKit -framework Foundation -framework QuartzCore             -install_name @executable_path/CFPlugin.dylib             -o CFPlugin.dylib src/CFPlugin.m
+          echo "=== dylib built ==="
           ls -lh CFPlugin.dylib
-          echo "--- otool ---"
           xcrun --sdk iphoneos otool -hv CFPlugin.dylib || true
+          xcrun --sdk iphoneos nm -g CFPlugin.dylib | grep load || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CFPlugin-full
+          name: CFPlugin-v5
           path: CFPlugin.dylib
           retention-days: 30
