@@ -1,4 +1,4 @@
-name: Build CFPlugin
+﻿name: Build CFPlugin v5
 
 on:
   workflow_dispatch:
@@ -34,77 +34,66 @@ static UIView *g_overlay = nil;
 - (void)drawRect:(CGRect)r {
     CGContextRef c = UIGraphicsGetCurrentContext();
     if (!c) return;
-    // Red semi-transparent rect to confirm drawing works
-    CGContextSetRGBFillColor(c, 1.0, 0.0, 0.0, 0.3);
-    CGContextFillRect(c, CGRectMake(20, 100, 200, 50));
-    // Text
     NSString *txt = [NSString stringWithFormat:@"CF v5 | pid=%d", (int)getpid()];
-    [txt drawAtPoint:CGPointMake(25, 110)
-      withAttributes:@{
-          NSFontAttributeName:[UIFont boldSystemFontOfSize:18],
-          NSForegroundColorAttributeName:[UIColor greenColor]
-      }];
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [UIFont boldSystemFontOfSize:18],
+        NSForegroundColorAttributeName: [UIColor greenColor]
+    };
+    [txt drawAtPoint:CGPointMake(25, 110) withAttributes:attrs];
 }
 @end
 
 void cf_attach(void) {
     if (g_overlay) return;
     UIWindow *win = nil;
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     win = [UIApplication sharedApplication].keyWindow;
-    #pragma clang diagnostic pop
+#pragma clang diagnostic pop
     if (!win) {
         for (UIWindow *w in [UIApplication sharedApplication].windows) {
             if (w.hidden == NO) { win = w; break; }
         }
     }
-    if (!win) {
-        NSLog(@"[CF] no window");
-        return;
-    }
-    NSLog(@"[CF] window=%@", win);
+    if (!win) return;
     g_overlay = [[CFOverlay alloc] initWithFrame:win.bounds];
     g_overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [win addSubview:g_overlay];
     [win bringSubviewToFront:g_overlay];
     CADisplayLink *link = [CADisplayLink displayLinkWithTarget:g_overlay selector:@selector(setNeedsDisplay)];
     [link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-    NSLog(@"[CF] attached OK");
 }
 
 @interface CFLoader : NSObject
 @end
 @implementation CFLoader
 + (void)load {
-    NSLog(@"[CF] +load pid=%d", (int)getpid());
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
                    dispatch_get_main_queue(), ^{
-        cf_attach();
-        if (!g_overlay) {
-            // Retry
-            for (int i = 0; i < 60 && !g_overlay; i++) {
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC) * (i+1)),
-                               dispatch_get_main_queue(), ^{ cf_attach(); });
-            }
+        for (int i=0;i<60&&!g_overlay;i++) {
+            usleep(500000);
+            dispatch_async(dispatch_get_main_queue(), ^{ cf_attach(); });
         }
     });
 }
 @end
 EOF
-          echo "Source written:  lines"
+          echo "Source: $(wc -l < src/CFPlugin.m) lines"
 
-      - name: Compile dylib
+      - name: Compile
         run: |
-          set -e
-          SDK=
-          xcrun --sdk iphoneos clang -dynamiclib -arch arm64             -isysroot ""             -miphoneos-version-min=14.0             -fobjc-arc -O2             -framework UIKit -framework Foundation -framework QuartzCore             -install_name @executable_path/CFPlugin.dylib             -o CFPlugin.dylib src/CFPlugin.m
-          echo "=== dylib built ==="
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun --sdk iphoneos clang -dynamiclib -arch arm64 \
+            -isysroot "$SDK" \
+            -miphoneos-version-min=14.0 \
+            -fobjc-arc -O2 \
+            -framework UIKit -framework Foundation -framework QuartzCore \
+            -install_name @executable_path/CFPlugin.dylib \
+            -o CFPlugin.dylib src/CFPlugin.m
           ls -lh CFPlugin.dylib
           xcrun --sdk iphoneos otool -hv CFPlugin.dylib || true
-          xcrun --sdk iphoneos nm -g CFPlugin.dylib | grep load || true
 
-      - name: Upload artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: CFPlugin-v5
