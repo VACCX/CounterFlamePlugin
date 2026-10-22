@@ -1,4 +1,4 @@
-name: Build CFPlugin v7
+name: Build CFPlugin v8
 on:
   workflow_dispatch:
   push:
@@ -13,52 +13,139 @@ jobs:
           cat > src.b64 << 'B64EOF'
           I2ltcG9ydCA8VUlLaXQvVUlLaXQuaD4KI2ltcG9ydCA8Rm91bmRhdGlvbi9Gb3VuZGF0
           aW9uLmg+CiNpbXBvcnQgPFF1YXJ0ekNvcmUvUXVhcnR6Q29yZS5oPgojaW5jbHVkZSA8
-          ZGlzcGF0Y2gvZGlzcGF0Y2guaD4KI2luY2x1ZGUgPHVuaXN0ZC5oPgoKc3RhdGljIFVJ
-          VmlldyAqZ19vdmVybGF5ID0gbmlsOwoKQGludGVyZmFjZSBDRk92ZXJsYXkgOiBVSVZp
-          ZXcKQGVuZApAaW1wbGVtZW50YXRpb24gQ0ZPdmVybGF5Ci0gKGluc3RhbmNldHlwZSlp
-          bml0V2l0aEZyYW1lOihDR1JlY3QpZiB7CiAgICBzZWxmID0gW3N1cGVyIGluaXRXaXRo
-          RnJhbWU6Zl07CiAgICBpZiAoc2VsZikgewogICAgICAgIHNlbGYuYmFja2dyb3VuZENv
-          bG9yID0gW1VJQ29sb3IgY2xlYXJDb2xvcl07CiAgICAgICAgc2VsZi5vcGFxdWUgPSBO
-          TzsKICAgICAgICBzZWxmLnVzZXJJbnRlcmFjdGlvbkVuYWJsZWQgPSBOTzsKICAgIH0K
-          ICAgIHJldHVybiBzZWxmOwp9Ci0gKHZvaWQpZHJhd1JlY3Q6KENHUmVjdClyIHsKICAg
-          IENHQ29udGV4dFJlZiBjID0gVUlHcmFwaGljc0dldEN1cnJlbnRDb250ZXh0KCk7CiAg
-          ICBpZiAoIWMpIHJldHVybjsKICAgIE5TU3RyaW5nICp0eHQgPSBbTlNTdHJpbmcgc3Ry
-          aW5nV2l0aEZvcm1hdDpAIkNGIHY3IHwgcGlkPSVkIiwgKGludClnZXRwaWQoKV07CiAg
+          ZGlzcGF0Y2gvZGlzcGF0Y2guaD4KI2luY2x1ZGUgPHVuaXN0ZC5oPgojaW5jbHVkZSA8
+          bWF0aC5oPgoKI2RlZmluZSBDRl9SRUQgICAgW1VJQ29sb3IgY29sb3JXaXRoUmVkOjEu
+          MCBncmVlbjowLjE1IGJsdWU6MC4xNSBhbHBoYToxLjBdCiNkZWZpbmUgQ0ZfR1JFRU4g
+          IFtVSUNvbG9yIGNvbG9yV2l0aFJlZDowLjEgZ3JlZW46MS4wIGJsdWU6MC4zIGFscGhh
+          OjEuMF0KI2RlZmluZSBDRl9DWUFOICAgW1VJQ29sb3IgY29sb3JXaXRoUmVkOjAuMiBn
+          cmVlbjowLjkgYmx1ZToxLjAgYWxwaGE6MS4wXQoKc3RhdGljIFVJVmlldyAqZ19vdmVy
+          bGF5ID0gbmlsOwpzdGF0aWMgZG91YmxlIGdfbGFzdFRpbWUgPSAwOwoKc3RhdGljIHZv
+          aWQgY2ZfYXR0YWNoKHZvaWQpOwoKQGludGVyZmFjZSBDRk92ZXJsYXkgOiBVSVZpZXcK
+          QGVuZAoKQGltcGxlbWVudGF0aW9uIENGT3ZlcmxheQoKLSAoaW5zdGFuY2V0eXBlKWlu
+          aXRXaXRoRnJhbWU6KENHUmVjdClmIHsKICAgIHNlbGYgPSBbc3VwZXIgaW5pdFdpdGhG
+          cmFtZTpmXTsKICAgIGlmIChzZWxmKSB7CiAgICAgICAgc2VsZi5iYWNrZ3JvdW5kQ29s
+          b3IgPSBbVUlDb2xvciBjbGVhckNvbG9yXTsKICAgICAgICBzZWxmLm9wYXF1ZSA9IE5P
+          OwogICAgICAgIHNlbGYudXNlckludGVyYWN0aW9uRW5hYmxlZCA9IE5POwogICAgICAg
+          IHNlbGYuYXV0b3Jlc2l6aW5nTWFzayA9IFVJVmlld0F1dG9yZXNpemluZ0ZsZXhpYmxl
+          V2lkdGggfCBVSVZpZXdBdXRvcmVzaXppbmdGbGV4aWJsZUhlaWdodDsKICAgIH0KICAg
+          IHJldHVybiBzZWxmOwp9CgotICh2b2lkKWRyYXdUZXh0OihOU1N0cmluZyAqKXMgYXQ6
+          KENHUG9pbnQpcCBjb2xvcjooVUlDb2xvciAqKWMgc2l6ZTooQ0dGbG9hdClzeiB7CiAg
           ICBOU0RpY3Rpb25hcnkgKmF0dHJzID0gQHsKICAgICAgICBOU0ZvbnRBdHRyaWJ1dGVO
-          YW1lOiBbVUlGb250IGJvbGRTeXN0ZW1Gb250T2ZTaXplOjE4XSwKICAgICAgICBOU0Zv
-          cmVncm91bmRDb2xvckF0dHJpYnV0ZU5hbWU6IFtVSUNvbG9yIGdyZWVuQ29sb3JdCiAg
-          ICB9OwogICAgW3R4dCBkcmF3QXRQb2ludDpDR1BvaW50TWFrZSgyNSwgMTEwKSB3aXRo
-          QXR0cmlidXRlczphdHRyc107Cn0KQGVuZAoKc3RhdGljIHZvaWQgY2ZfYXR0YWNoKHZv
-          aWQpIHsKICAgIGlmIChnX292ZXJsYXkpIHJldHVybjsKICAgIFVJV2luZG93ICp3aW4g
-          PSBuaWw7CiNwcmFnbWEgY2xhbmcgZGlhZ25vc3RpYyBwdXNoCiNwcmFnbWEgY2xhbmcg
-          ZGlhZ25vc3RpYyBpZ25vcmVkICItV2RlcHJlY2F0ZWQtZGVjbGFyYXRpb25zIgogICAg
-          d2luID0gW1VJQXBwbGljYXRpb24gc2hhcmVkQXBwbGljYXRpb25dLmtleVdpbmRvdzsK
-          I3ByYWdtYSBjbGFuZyBkaWFnbm9zdGljIHBvcAogICAgaWYgKCF3aW4pIHsKICAgICAg
-          ICBmb3IgKFVJV2luZG93ICp3IGluIFtVSUFwcGxpY2F0aW9uIHNoYXJlZEFwcGxpY2F0
-          aW9uXS53aW5kb3dzKSB7CiAgICAgICAgICAgIGlmICh3LmhpZGRlbiA9PSBOTyB8fCB3
-          LmlzS2V5V2luZG93KSB7IHdpbiA9IHc7IGJyZWFrOyB9CiAgICAgICAgfQogICAgfQog
-          ICAgaWYgKCF3aW4pIHJldHVybjsKICAgIGdfb3ZlcmxheSA9IFtbQ0ZPdmVybGF5IGFs
-          bG9jXSBpbml0V2l0aEZyYW1lOndpbi5ib3VuZHNdOwogICAgZ19vdmVybGF5LmF1dG9y
-          ZXNpemluZ01hc2sgPSBVSVZpZXdBdXRvcmVzaXppbmdGbGV4aWJsZVdpZHRoIHwgVUlW
-          aWV3QXV0b3Jlc2l6aW5nRmxleGlibGVIZWlnaHQ7CiAgICBbd2luIGFkZFN1YnZpZXc6
-          Z19vdmVybGF5XTsKICAgIFt3aW4gYnJpbmdTdWJ2aWV3VG9Gcm9udDpnX292ZXJsYXld
-          OwogICAgQ0FEaXNwbGF5TGluayAqbGluayA9IFtDQURpc3BsYXlMaW5rIGRpc3BsYXlM
-          aW5rV2l0aFRhcmdldDpnX292ZXJsYXkgc2VsZWN0b3I6QHNlbGVjdG9yKHNldE5lZWRz
-          RGlzcGxheSldOwogICAgW2xpbmsgYWRkVG9SdW5Mb29wOltOU1J1bkxvb3AgbWFpblJ1
-          bkxvb3BdIGZvck1vZGU6TlNSdW5Mb29wQ29tbW9uTW9kZXNdOwp9CgpfX2F0dHJpYnV0
-          ZV9fKChjb25zdHJ1Y3RvcikpCnN0YXRpYyB2b2lkIGNmX2luaXQodm9pZCkgewogICAg
-          ZGlzcGF0Y2hfYWZ0ZXIoZGlzcGF0Y2hfdGltZShESVNQQVRDSF9USU1FX05PVywgMyAq
-          IE5TRUNfUEVSX1NFQyksCiAgICAgICAgICAgICAgICAgICBkaXNwYXRjaF9nZXRfbWFp
-          bl9xdWV1ZSgpLCBeewogICAgICAgIGZvciAoaW50IGkgPSAwOyBpIDwgNjAgJiYgIWdf
-          b3ZlcmxheTsgaSsrKSB7CiAgICAgICAgICAgIHVzbGVlcCg1MDAwMDApOwogICAgICAg
-          ICAgICBkaXNwYXRjaF9hc3luYyhkaXNwYXRjaF9nZXRfbWFpbl9xdWV1ZSgpLCBeeyBj
-          Zl9hdHRhY2goKTsgfSk7CiAgICAgICAgfQogICAgfSk7Cn0K
+          YW1lOiBbVUlGb250IGJvbGRTeXN0ZW1Gb250T2ZTaXplOnN6XSwKICAgICAgICBOU0Zv
+          cmVncm91bmRDb2xvckF0dHJpYnV0ZU5hbWU6IGMKICAgIH07CiAgICBbcyBkcmF3QXRQ
+          b2ludDpwIHdpdGhBdHRyaWJ1dGVzOmF0dHJzXTsKfQoKLyogY29ybmVyIGJveDogOCBz
+          aG9ydCBzZWdtZW50cyAtPiB0eXBpY2FsIEVTUCBsb29rICovCi0gKHZvaWQpZHJhd0Nv
+          cm5lckJveDooQ0dSZWN0KXIgY29sb3I6KFVJQ29sb3IgKiljIGxlbjooQ0dGbG9hdCls
+          ZW4gd2lkdGg6KENHRmxvYXQpdyB7CiAgICBDR0NvbnRleHRSZWYgY3R4ID0gVUlHcmFw
+          aGljc0dldEN1cnJlbnRDb250ZXh0KCk7CiAgICBpZiAoIWN0eCkgcmV0dXJuOwogICAg
+          Q0dDb250ZXh0U2V0U3Ryb2tlQ29sb3JXaXRoQ29sb3IoY3R4LCBjLkNHQ29sb3IpOwog
+          ICAgQ0dDb250ZXh0U2V0TGluZVdpZHRoKGN0eCwgdyk7CiAgICBDR0Zsb2F0IHgwID0g
+          Q0dSZWN0R2V0TWluWChyKSwgeTAgPSBDR1JlY3RHZXRNaW5ZKHIpOwogICAgQ0dGbG9h
+          dCB4MSA9IENHUmVjdEdldE1heFgociksIHkxID0gQ0dSZWN0R2V0TWF4WShyKTsKICAg
+          IENHUG9pbnQgcHRzWzhdWzJdID0gewogICAgICAgIHt7eDAsIHkwfSwge3gwICsgbGVu
+          LCB5MH19LAogICAgICAgIHt7eDAsIHkwfSwge3gwLCB5MCArIGxlbn19LAogICAgICAg
+          IHt7eDEsIHkwfSwge3gxIC0gbGVuLCB5MH19LAogICAgICAgIHt7eDEsIHkwfSwge3gx
+          LCB5MCArIGxlbn19LAogICAgICAgIHt7eDAsIHkxfSwge3gwICsgbGVuLCB5MX19LAog
+          ICAgICAgIHt7eDAsIHkxfSwge3gwLCB5MSAtIGxlbn19LAogICAgICAgIHt7eDEsIHkx
+          fSwge3gxIC0gbGVuLCB5MX19LAogICAgICAgIHt7eDEsIHkxfSwge3gxLCB5MSAtIGxl
+          bn19CiAgICB9OwogICAgZm9yIChpbnQgaSA9IDA7IGkgPCA4OyBpKyspIHsKICAgICAg
+          ICBDR0NvbnRleHRNb3ZlVG9Qb2ludChjdHgsIHB0c1tpXVswXS54LCBwdHNbaV1bMF0u
+          eSk7CiAgICAgICAgQ0dDb250ZXh0QWRkTGluZVRvUG9pbnQoY3R4LCBwdHNbaV1bMV0u
+          eCwgcHRzW2ldWzFdLnkpOwogICAgfQogICAgQ0dDb250ZXh0U3Ryb2tlUGF0aChjdHgp
+          Owp9CgotICh2b2lkKWRyYXdSZWN0OihDR1JlY3QpciB7CiAgICBDR0NvbnRleHRSZWYg
+          Y3R4ID0gVUlHcmFwaGljc0dldEN1cnJlbnRDb250ZXh0KCk7CiAgICBpZiAoIWN0eCkg
+          cmV0dXJuOwoKICAgIENHUmVjdCBiID0gc2VsZi5ib3VuZHM7CiAgICBDR0Zsb2F0IFcg
+          PSBiLnNpemUud2lkdGgsIEggPSBiLnNpemUuaGVpZ2h0OwoKICAgIC8qIC0tLS0tLS0t
+          LS0gRlBTIC0tLS0tLS0tLS0gKi8KICAgIGRvdWJsZSBub3cgPSBDQUN1cnJlbnRNZWRp
+          YVRpbWUoKTsKICAgIGRvdWJsZSBmcHMgPSAwLjA7CiAgICBpZiAoZ19sYXN0VGltZSA+
+          IDApIGZwcyA9IDEuMCAvIChub3cgLSBnX2xhc3RUaW1lKTsKICAgIGdfbGFzdFRpbWUg
+          PSBub3c7CgogICAgLyogLS0tLS0tLS0tLSBIVUQgKHRvcCBsZWZ0KSAtLS0tLS0tLS0t
+          ICovCiAgICBOU1N0cmluZyAqaHVkID0gW05TU3RyaW5nIHN0cmluZ1dpdGhGb3JtYXQ6
+          QCJDRiBEUkFXIHYxICBwaWQ9JWQiLCAoaW50KWdldHBpZCgpXTsKICAgIE5TU3RyaW5n
+          ICpodWQyID0gW05TU3RyaW5nIHN0cmluZ1dpdGhGb3JtYXQ6QCIlLjBmeCUuMGYgIGZw
+          cz0lLjBmIiwgVywgSCwgZnBzXTsKICAgIFtzZWxmIGRyYXdUZXh0Omh1ZCAgYXQ6Q0dQ
+          b2ludE1ha2UoMjAsIDYwKSBjb2xvcjpDRl9HUkVFTiBzaXplOjE1XTsKICAgIFtzZWxm
+          IGRyYXdUZXh0Omh1ZDIgYXQ6Q0dQb2ludE1ha2UoMjAsIDgyKSBjb2xvcjpDRl9DWUFO
+          ICBzaXplOjEzXTsKCiAgICAvKiAtLS0tLS0tLS0tIGNyb3NzaGFpciAoc2NyZWVuIGNl
+          bnRlcikgLS0tLS0tLS0tLSAqLwogICAgQ0dDb250ZXh0U2V0U3Ryb2tlQ29sb3JXaXRo
+          Q29sb3IoY3R4LCBDRl9HUkVFTi5DR0NvbG9yKTsKICAgIENHQ29udGV4dFNldExpbmVX
+          aWR0aChjdHgsIDEuNSk7CiAgICBDR0Zsb2F0IGN4ID0gVyAvIDIuMCwgY3kgPSBIIC8g
+          Mi4wLCBnYXAgPSA4LCBhcm0gPSAxODsKICAgIENHQ29udGV4dE1vdmVUb1BvaW50KGN0
+          eCwgY3ggLSBnYXAgLSBhcm0sIGN5KTsKICAgIENHQ29udGV4dEFkZExpbmVUb1BvaW50
+          KGN0eCwgY3ggLSBnYXAsIGN5KTsKICAgIENHQ29udGV4dE1vdmVUb1BvaW50KGN0eCwg
+          Y3ggKyBnYXAsIGN5KTsKICAgIENHQ29udGV4dEFkZExpbmVUb1BvaW50KGN0eCwgY3gg
+          KyBnYXAgKyBhcm0sIGN5KTsKICAgIENHQ29udGV4dE1vdmVUb1BvaW50KGN0eCwgY3gs
+          IGN5IC0gZ2FwIC0gYXJtKTsKICAgIENHQ29udGV4dEFkZExpbmVUb1BvaW50KGN0eCwg
+          Y3gsIGN5IC0gZ2FwKTsKICAgIENHQ29udGV4dE1vdmVUb1BvaW50KGN0eCwgY3gsIGN5
+          ICsgZ2FwKTsKICAgIENHQ29udGV4dEFkZExpbmVUb1BvaW50KGN0eCwgY3gsIGN5ICsg
+          Z2FwICsgYXJtKTsKICAgIENHQ29udGV4dFN0cm9rZVBhdGgoY3R4KTsKCiAgICAvKiAt
+          LS0tLS0tLS0tIERFTU8gdGFyZ2V0IChzdGF0aWMsIHByb3ZlcyBkcmF3aW5nIHBpcGVs
+          aW5lKSAtLS0tLS0tLS0tICovCiAgICBDR0Zsb2F0IGJ3ID0gVyAqIDAuMTMsIGJoID0g
+          YncgKiAxLjk7CiAgICBDR1JlY3QgYm94ID0gQ0dSZWN0TWFrZShXICogMC42OCwgSCAq
+          IDAuMzQsIGJ3LCBiaCk7CiAgICBbc2VsZiBkcmF3Q29ybmVyQm94OmJveCBjb2xvcjpD
+          Rl9SRUQgbGVuOihidyAqIDAuMjgpIHdpZHRoOjIuMF07CgogICAgLyogaGVhbHRoIGJh
+          ciBsZWZ0IG9mIGJveCAqLwogICAgQ0dGbG9hdCBoYlggPSBDR1JlY3RHZXRNaW5YKGJv
+          eCkgLSA3OwogICAgQ0dDb250ZXh0U2V0RmlsbENvbG9yV2l0aENvbG9yKGN0eCwgW1VJ
+          Q29sb3IgY29sb3JXaXRoV2hpdGU6MC4wIGFscGhhOjAuNDVdLkNHQ29sb3IpOwogICAg
+          Q0dDb250ZXh0RmlsbFJlY3QoY3R4LCBDR1JlY3RNYWtlKGhiWCwgQ0dSZWN0R2V0TWlu
+          WShib3gpLCA0LCBiaCkpOwogICAgQ0dDb250ZXh0U2V0RmlsbENvbG9yV2l0aENvbG9y
+          KGN0eCwgQ0ZfR1JFRU4uQ0dDb2xvcik7CiAgICBDR0NvbnRleHRGaWxsUmVjdChjdHgs
+          IENHUmVjdE1ha2UoaGJYLCBDR1JlY3RHZXRNaW5ZKGJveCksIDQsIGJoICogMC43OCkp
+          OwoKICAgIC8qIGhlYWQgY2lyY2xlICovCiAgICBDR0NvbnRleHRTZXRTdHJva2VDb2xv
+          cldpdGhDb2xvcihjdHgsIENGX1JFRC5DR0NvbG9yKTsKICAgIENHQ29udGV4dFNldExp
+          bmVXaWR0aChjdHgsIDEuNSk7CiAgICBDR0NvbnRleHRTdHJva2VFbGxpcHNlSW5SZWN0
+          KGN0eCwgQ0dSZWN0TWFrZShDR1JlY3RHZXRNaWRYKGJveCkgLSA5LCBDR1JlY3RHZXRN
+          aW5ZKGJveCkgLSAyMiwgMTgsIDE4KSk7CgogICAgLyogbGFiZWxzICovCiAgICBbc2Vs
+          ZiBkcmF3VGV4dDpAIkRFTU8gVEFSR0VUIiBhdDpDR1BvaW50TWFrZShDR1JlY3RHZXRN
+          aW5YKGJveCkgLSA0LCBDR1JlY3RHZXRNaW5ZKGJveCkgLSA0MikgY29sb3I6Q0ZfUkVE
+          IHNpemU6MTJdOwogICAgW3NlbGYgZHJhd1RleHQ6QCJIUCA3OCUgIHwgIDMybSIgYXQ6
+          Q0dQb2ludE1ha2UoQ0dSZWN0R2V0TWluWChib3gpIC0gNCwgQ0dSZWN0R2V0TWF4WShi
+          b3gpICsgNSkgY29sb3I6Q0ZfQ1lBTiBzaXplOjExXTsKCiAgICAvKiBzbmFwbGluZSBm
+          cm9tIGJvdHRvbSBjZW50ZXIgdG8gYm94ICovCiAgICBDR0NvbnRleHRTZXRTdHJva2VD
+          b2xvcldpdGhDb2xvcihjdHgsIFtVSUNvbG9yIGNvbG9yV2l0aFdoaXRlOjEuMCBhbHBo
+          YTowLjU1XS5DR0NvbG9yKTsKICAgIENHQ29udGV4dFNldExpbmVXaWR0aChjdHgsIDEu
+          MCk7CiAgICBDR0NvbnRleHRNb3ZlVG9Qb2ludChjdHgsIGN4LCBIIC0gMik7CiAgICBD
+          R0NvbnRleHRBZGRMaW5lVG9Qb2ludChjdHgsIENHUmVjdEdldE1pZFgoYm94KSwgQ0dS
+          ZWN0R2V0TWF4WShib3gpKTsKICAgIENHQ29udGV4dFN0cm9rZVBhdGgoY3R4KTsKfQoK
+          LSAodm9pZCl0aWNrIHsKICAgIFtzZWxmIHNldE5lZWRzRGlzcGxheV07Cn0KCkBlbmQK
+          CnN0YXRpYyBVSVdpbmRvdyAqY2Zfa2V5X3dpbmRvdyh2b2lkKSB7CiAgICBVSUFwcGxp
+          Y2F0aW9uICphcHAgPSBbVUlBcHBsaWNhdGlvbiBzaGFyZWRBcHBsaWNhdGlvbl07CiAg
+          ICBVSVdpbmRvdyAqayA9IG5pbDsKI3ByYWdtYSBjbGFuZyBkaWFnbm9zdGljIHB1c2gK
+          I3ByYWdtYSBjbGFuZyBkaWFnbm9zdGljIGlnbm9yZWQgIi1XZGVwcmVjYXRlZC1kZWNs
+          YXJhdGlvbnMiCiAgICBrID0gYXBwLmtleVdpbmRvdzsKI3ByYWdtYSBjbGFuZyBkaWFn
+          bm9zdGljIHBvcAogICAgaWYgKGspIHJldHVybiBrOwogICAgZm9yIChVSVdpbmRvdyAq
+          dyBpbiBhcHAud2luZG93cykgewogICAgICAgIGlmICh3LmlzS2V5V2luZG93KSByZXR1
+          cm4gdzsKICAgIH0KICAgIGZvciAoVUlXaW5kb3cgKncgaW4gYXBwLndpbmRvd3MpIHsK
+          ICAgICAgICBpZiAoIXcuaGlkZGVuKSByZXR1cm4gdzsKICAgIH0KICAgIHJldHVybiBu
+          aWw7Cn0KCnN0YXRpYyBDQURpc3BsYXlMaW5rICpnX2xpbmsgPSBuaWw7CgpzdGF0aWMg
+          dm9pZCBjZl9hdHRhY2godm9pZCkgewogICAgVUlXaW5kb3cgKndpbiA9IGNmX2tleV93
+          aW5kb3coKTsKICAgIGlmICghd2luKSByZXR1cm47CiAgICBpZiAoZ19vdmVybGF5ICYm
+          IGdfb3ZlcmxheS5zdXBlcnZpZXcgPT0gd2luKSB7CiAgICAgICAgW3dpbiBicmluZ1N1
+          YnZpZXdUb0Zyb250Omdfb3ZlcmxheV07CiAgICAgICAgcmV0dXJuOwogICAgfQogICAg
+          W2dfb3ZlcmxheSByZW1vdmVGcm9tU3VwZXJ2aWV3XTsKICAgIGlmICghZ19vdmVybGF5
+          KSB7CiAgICAgICAgZ19vdmVybGF5ID0gW1tDRk92ZXJsYXkgYWxsb2NdIGluaXRXaXRo
+          RnJhbWU6d2luLmJvdW5kc107CiAgICB9IGVsc2UgewogICAgICAgIGdfb3ZlcmxheS5m
+          cmFtZSA9IHdpbi5ib3VuZHM7CiAgICB9CiAgICBbd2luIGFkZFN1YnZpZXc6Z19vdmVy
+          bGF5XTsKICAgIFt3aW4gYnJpbmdTdWJ2aWV3VG9Gcm9udDpnX292ZXJsYXldOwogICAg
+          aWYgKCFnX2xpbmspIHsKICAgICAgICBnX2xpbmsgPSBbQ0FEaXNwbGF5TGluayBkaXNw
+          bGF5TGlua1dpdGhUYXJnZXQ6Z19vdmVybGF5IHNlbGVjdG9yOkBzZWxlY3Rvcih0aWNr
+          KV07CiAgICAgICAgW2dfbGluayBhZGRUb1J1bkxvb3A6W05TUnVuTG9vcCBtYWluUnVu
+          TG9vcF0gZm9yTW9kZTpOU1J1bkxvb3BDb21tb25Nb2Rlc107CiAgICB9CiAgICBOU0xv
+          ZyhAIltDRlBsdWdpbl0gb3ZlcmxheSBhdHRhY2hlZCB0byB3aW5kb3cgJUAiLCB3aW4p
+          Owp9CgpfX2F0dHJpYnV0ZV9fKChjb25zdHJ1Y3RvcikpCnN0YXRpYyB2b2lkIGNmX2lu
+          aXQodm9pZCkgewogICAgTlNMb2coQCJbQ0ZQbHVnaW5dIGxvYWRlZCAocGlkPSVkKSIs
+          IChpbnQpZ2V0cGlkKCkpOwogICAgZGlzcGF0Y2hfYWZ0ZXIoZGlzcGF0Y2hfdGltZShE
+          SVNQQVRDSF9USU1FX05PVywgKGludDY0X3QpKDEuMCAqIE5TRUNfUEVSX1NFQykpLAog
+          ICAgICAgICAgICAgICAgICAgZGlzcGF0Y2hfZ2V0X21haW5fcXVldWUoKSwgXnsKICAg
+          ICAgICBjZl9hdHRhY2goKTsKICAgICAgICAvKiBrZWVwIHJlLWF0dGFjaGluZzogVW5p
+          dHkgY3JlYXRlcyAvIHN3YXBzIHdpbmRvd3MgYWZ0ZXIgbGF1bmNoICovCiAgICAgICAg
+          W05TVGltZXIgc2NoZWR1bGVkVGltZXJXaXRoVGltZUludGVydmFsOjEuNSByZXBlYXRz
+          OllFUyBibG9jazpeKE5TVGltZXIgKnQpIHsKICAgICAgICAgICAgY2ZfYXR0YWNoKCk7
+          CiAgICAgICAgfV07CiAgICB9KTsKfQo=
           B64EOF
           base64 -d < src.b64 > src/CFPlugin.m || base64 -D < src.b64 > src/CFPlugin.m
           rm -f src.b64
-          echo "=== source ==="
           wc -l src/CFPlugin.m
-          head -20 src/CFPlugin.m
       - name: Compile
         run: |
           set -x
@@ -70,7 +157,6 @@ jobs:
             -fobjc-arc -O2 \
             -framework UIKit -framework Foundation -framework QuartzCore \
             -install_name @executable_path/CFPlugin.dylib \
-            -fmessage-length=0 \
             -o CFPlugin.dylib src/CFPlugin.m
           ls -lh CFPlugin.dylib
           xcrun --sdk iphoneos otool -hv CFPlugin.dylib || true
@@ -78,6 +164,6 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: CFPlugin-v7
+          name: CFPlugin-v8
           path: CFPlugin.dylib
           retention-days: 30
