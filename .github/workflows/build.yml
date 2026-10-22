@@ -156,6 +156,7 @@ jobs:
             -miphoneos-version-min=14.0 \
             -fobjc-arc -O2 \
             -framework UIKit -framework Foundation -framework QuartzCore \
+            -framework CoreGraphics -framework CoreFoundation \
             -install_name @executable_path/CFPlugin.dylib \
             -o CFPlugin.dylib src/CFPlugin.m
           ls -lh CFPlugin.dylib
