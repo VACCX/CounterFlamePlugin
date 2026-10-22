@@ -1,4 +1,4 @@
-name: Build CFPlugin.dylib
+name: Build CFPlugin.dylib v2
 
 on:
   workflow_dispatch:
@@ -18,6 +18,8 @@ jobs:
           cat > src/CFPlugin.m << 'CF_EOF'
           #import <UIKit/UIKit.h>
           #import <QuartzCore/QuartzCore.h>
+          #import <objc/runtime.h>
+          #import <objc/message.h>
           #include <math.h>
           #include <stdarg.h>
           #include <unistd.h>
@@ -28,308 +30,202 @@ jobs:
               float world[3];
               float screen[3];
               float headScreen[3];
-              float health;
-              float maxHealth;
-              float distance;
-              int team;
-              int local;
-              int visible;
-              int dead;
-              int valid;
+              float health, maxHealth, distance;
+              int team, local, visible, dead, valid;
               char name[32];
           } CFPlayer;
 
           typedef struct {
-              int enabled;
-              int box;
-              int health;
-              int snapline;
-              int name;
-              int showDistance;
-              int head;
-              int teamCheck;
-              int visibleCheck;
-              int corner;
+              int enabled, box, health, snapline, name, showDistance, head, teamCheck, visibleCheck, corner;
               float maxDistance;
-              float fontScale;
-              int colorEnemy[4];
-              int colorTeam[4];
-              int colorVisible[4];
-              int colorHidden[4];
+              int colorEnemy[4], colorTeam[4], colorVisible[4], colorHidden[4];
           } CFConfig;
 
           static CFPlayer g_players[CF_MAX_PLAYERS];
           static int g_playerCount = 0;
-          static CFConfig g_cfg = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 300.0f, 1.0f,
-              {255, 40, 40, 255}, {40, 255, 40, 255}, {255, 255, 0, 255}, {150, 0, 0, 255} };
+          static CFConfig g_cfg = { 1,1,1,1,1,1,1,1,1,1, 300.0f,
+              {255,40,40,255},{40,255,40,255},{255,255,0,255},{150,0,0,255} };
 
-          static UIView *g_overlayView = nil;
-          static CADisplayLink *g_displayLink = nil;
+          static UIView *g_overlay = nil;
+          static CADisplayLink *g_link = nil;
 
-          static void CFLog(NSString *fmt, ...) {
-              va_list ap;
-              va_start(ap, fmt);
-              NSString *s = [[NSString alloc] initWithFormat:fmt arguments:ap];
+          static void cf_log(NSString *fmt, ...) {
+              va_list ap; va_start(ap,fmt);
+              NSLog(@"[CFPlugin] %@", [[NSString alloc] initWithFormat:fmt arguments:ap]);
               va_end(ap);
-              NSLog(@"[CFPlugin] %@", s);
           }
 
-          static void CFColor(CGContextRef ctx, int c[4], BOOL stroke) {
-              if (stroke) {
-                  CGContextSetRGBStrokeColor(ctx, c[0]/255.0f, c[1]/255.0f, c[2]/255.0f, c[3]/255.0f);
-              } else {
-                  CGContextSetRGBFillColor(ctx, c[0]/255.0f, c[1]/255.0f, c[2]/255.0f, c[3]/255.0f);
-              }
+          static void cf_color(CGContextRef ctx, int c[4], int stroke) {
+              if(stroke) CGContextSetRGBStrokeColor(ctx,c[0]/255.f,c[1]/255.f,c[2]/255.f,c[3]/255.f);
+              else CGContextSetRGBFillColor(ctx,c[0]/255.f,c[1]/255.f,c[2]/255.f,c[3]/255.f);
           }
 
-          static void CFBox(CGRect r, float t, int c[4]) {
-              CGContextRef ctx = UIGraphicsGetCurrentContext();
-              if (!ctx) return;
-              CFColor(ctx, c, YES);
-              CGContextSetLineWidth(ctx, t);
-              CGContextStrokeRect(ctx, r);
+          static void cf_box(CGRect r, float t, int c[4]) {
+              CGContextRef ctx=UIGraphicsGetCurrentContext(); if(!ctx)return;
+              cf_color(ctx,c,1); CGContextSetLineWidth(ctx,t); CGContextStrokeRect(ctx,r);
           }
-
-          static void CFCornerBox(CGRect r, float t, int c[4]) {
-              float len = MIN(r.size.width, r.size.height) * 0.25f;
-              if (len > 30.0f) len = 30.0f;
-              CGContextRef ctx = UIGraphicsGetCurrentContext();
-              if (!ctx) return;
-              CFColor(ctx, c, YES);
-              CGContextSetLineWidth(ctx, t);
-              float x = r.origin.x, y = r.origin.y, w = r.size.width, h = r.size.height;
+          static void cf_corner(CGRect r, float t, int c[4]) {
+              float L=fminf(r.size.width,r.size.height)*0.25f; if(L>30)L=30;
+              CGContextRef ctx=UIGraphicsGetCurrentContext(); if(!ctx)return;
+              cf_color(ctx,c,1); CGContextSetLineWidth(ctx,t);
+              float x=r.origin.x,y=r.origin.y,w=r.size.width,h=r.size.height;
               CGContextBeginPath(ctx);
-              CGContextMoveToPoint(ctx, x, y + len);      CGContextAddLineToPoint(ctx, x, y);
-              CGContextAddLineToPoint(ctx, x + len, y);
-              CGContextMoveToPoint(ctx, x + w - len, y);  CGContextAddLineToPoint(ctx, x + w, y);
-              CGContextAddLineToPoint(ctx, x + w, y + len);
-              CGContextMoveToPoint(ctx, x, y + h - len);  CGContextAddLineToPoint(ctx, x, y + h);
-              CGContextAddLineToPoint(ctx, x + len, y + h);
-              CGContextMoveToPoint(ctx, x + w - len, y + h); CGContextAddLineToPoint(ctx, x + w, y + h);
-              CGContextAddLineToPoint(ctx, x + w, y + h - len);
+              CGContextMoveToPoint(ctx,x,y+L);CGContextAddLineToPoint(ctx,x,y);CGContextAddLineToPoint(ctx,x+L,y);
+              CGContextMoveToPoint(ctx,x+w-L,y);CGContextAddLineToPoint(ctx,x+w,y);CGContextAddLineToPoint(ctx,x+w,y+L);
+              CGContextMoveToPoint(ctx,x,y+h-L);CGContextAddLineToPoint(ctx,x,y+h);CGContextAddLineToPoint(ctx,x+L,y+h);
+              CGContextMoveToPoint(ctx,x+w-L,y+h);CGContextAddLineToPoint(ctx,x+w,y+h);CGContextAddLineToPoint(ctx,x+w,y+h-L);
               CGContextStrokePath(ctx);
           }
-
-          static void CFLine(CGPoint a, CGPoint b, float t, int c[4]) {
-              CGContextRef ctx = UIGraphicsGetCurrentContext();
-              if (!ctx) return;
-              CFColor(ctx, c, YES);
-              CGContextSetLineWidth(ctx, t);
-              CGContextMoveToPoint(ctx, a.x, a.y);
-              CGContextAddLineToPoint(ctx, b.x, b.y);
-              CGContextStrokePath(ctx);
+          static void cf_line(CGPoint a, CGPoint b, float t, int c[4]) {
+              CGContextRef ctx=UIGraphicsGetCurrentContext(); if(!ctx)return;
+              cf_color(ctx,c,1); CGContextSetLineWidth(ctx,t);
+              CGContextMoveToPoint(ctx,a.x,a.y); CGContextAddLineToPoint(ctx,b.x,b.y); CGContextStrokePath(ctx);
           }
-
-          static void CFText(NSString *text, CGPoint p, float scale, int c[4]) {
-              UIFont *font = [UIFont boldSystemFontOfSize:12.0f * scale];
-              UIColor *col = [UIColor colorWithRed:c[0]/255.0f green:c[1]/255.0f blue:c[2]/255.0f alpha:c[3]/255.0f];
-              NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
-              ps.alignment = NSTextAlignmentCenter;
-              [text drawInRect:CGRectMake(p.x - 80.0f, p.y, 160.0f, 18.0f * scale)
-                withAttributes:@{ NSFontAttributeName: font,
-                                  NSForegroundColorAttributeName: col,
-                                  NSParagraphStyleAttributeName: ps }];
+          static void cf_text(NSString *s, CGPoint p, float sz, int c[4]) {
+              UIFont *f=[UIFont boldSystemFontOfSize:12.f*sz];
+              UIColor *u=[UIColor colorWithRed:c[0]/255.f green:c[1]/255.f blue:c[2]/255.f alpha:c[3]/255.f];
+              [s drawAtPoint:p withAttributes:@{NSFontAttributeName:f,NSForegroundColorAttributeName:u}];
           }
-
-          static void CFHealthBar(CGRect r, float hp, float maxhp) {
-              CGContextRef ctx = UIGraphicsGetCurrentContext();
-              if (!ctx) return;
-              float ratio = maxhp > 0.0f ? hp / maxhp : 0.0f;
-              if (ratio < 0.0f) ratio = 0.0f;
-              if (ratio > 1.0f) ratio = 1.0f;
-              CGContextSetRGBFillColor(ctx, 0, 0, 0, 0.55f);
-              CGContextFillRect(ctx, CGRectInset(r, -1.0f, -1.0f));
-              float red = ratio < 0.5f ? 1.0f : (1.0f - ratio) * 2.0f;
-              float green = ratio > 0.5f ? 1.0f : ratio * 2.0f;
-              CGContextSetRGBFillColor(ctx, red, green, 0, 0.95f);
-              CGContextFillRect(ctx, CGRectMake(r.origin.x, r.origin.y + r.size.height * (1.0f - ratio),
-                                                r.size.width, r.size.height * ratio));
+          static void cf_hpbar(CGRect r, float hp, float max) {
+              CGContextRef ctx=UIGraphicsGetCurrentContext(); if(!ctx)return;
+              float R=max>0?hp/max:0; if(R<0)R=0; if(R>1)R=1;
+              CGContextSetRGBFillColor(ctx,0,0,0,0.5f); CGContextFillRect(ctx,CGRectInset(r,-1,-1));
+              float red=R<0.5f?1:(1-R)*2, green=R>0.5f?1:R*2;
+              CGContextSetRGBFillColor(ctx,red,green,0,0.9f);
+              CGContextFillRect(ctx,CGRectMake(r.origin.x,r.origin.y+r.size.height*(1-R),r.size.width,r.size.height*R));
           }
-
-          static void CFHeadCircle(CGPoint c, float radius, int col[4]) {
-              CGContextRef ctx = UIGraphicsGetCurrentContext();
-              if (!ctx) return;
-              CFColor(ctx, col, YES);
-              CGContextSetLineWidth(ctx, 1.5f);
-              CGContextStrokeEllipseInRect(ctx, CGRectMake(c.x - radius, c.y - radius, radius * 2.0f, radius * 2.0f));
+          static void cf_head(CGPoint c, float R, int col[4]) {
+              CGContextRef ctx=UIGraphicsGetCurrentContext(); if(!ctx)return;
+              cf_color(ctx,col,1); CGContextSetLineWidth(ctx,1.5f);
+              CGContextStrokeEllipseInRect(ctx,CGRectMake(c.x-R,c.y-R,R*2,R*2));
           }
-
-          static BOOL CFIsTeammate(int team) {
-              int i;
-              for (i = 0; i < g_playerCount; i++) {
-                  if (g_players[i].local) return g_players[i].team == team;
-              }
-              return NO;
+          static int cf_isteam(int team) {
+              for(int i=0;i<g_playerCount;i++) if(g_players[i].local) return g_players[i].team==team;
+              return 0;
           }
-
-          /*
-           * IL2CPP player enumeration.
-           * Replace this body with real IL2CPP reads once class / field offsets
-           * of CounterFlame are known (PlayerList, PlayerInfo, Transform, HP, Team).
-           */
-          static void CFGatherPlayers(void) {
-              g_playerCount = 0;
-          }
-
-          static void CFRenderEsp(void) {
-              CGSize screen = [UIScreen mainScreen].bounds.size;
-              int i;
-              for (i = 0; i < g_playerCount && i < CF_MAX_PLAYERS; i++) {
-                  CFPlayer *p = &g_players[i];
-                  if (!p->valid || p->dead || p->local) continue;
-                  if (g_cfg.teamCheck && CFIsTeammate(p->team)) continue;
-                  if (g_cfg.visibleCheck && !p->visible) continue;
-                  if (p->screen[2] <= 0.0f) continue;
-                  if (p->distance > g_cfg.maxDistance) continue;
-
-                  float w = 60.0f / (p->distance > 1.0f ? p->distance : 1.0f);
-                  float h = w * 2.0f;
-                  if (w < 18.0f) w = 18.0f;
-                  if (h < 40.0f) h = 40.0f;
-
-                  CGRect box = CGRectMake(p->screen[0] - w * 0.5f, p->screen[1] - h, w, h);
-                  int *col = g_cfg.colorEnemy;
-                  if (g_cfg.visibleCheck) col = p->visible ? g_cfg.colorVisible : g_cfg.colorHidden;
-                  if (g_cfg.teamCheck && CFIsTeammate(p->team)) col = g_cfg.colorTeam;
-
-                  if (g_cfg.box) {
-                      if (g_cfg.corner) CFCornerBox(box, 1.5f, col);
-                      else CFBox(box, 1.5f, col);
-                  }
-                  if (g_cfg.health) {
-                      CFHealthBar(CGRectMake(box.origin.x - 6.0f, box.origin.y, 3.0f, h), p->health, p->maxHealth);
-                  }
-                  if (g_cfg.snapline) {
-                      CFLine(CGPointMake(p->screen[0], p->screen[1]),
-                             CGPointMake(screen.width * 0.5f, screen.height),
-                             1.0f, col);
-                  }
-                  if (g_cfg.head && p->headScreen[2] > 0.0f) {
-                      CFHeadCircle(CGPointMake(p->headScreen[0], p->headScreen[1]), w * 0.3f, col);
-                  }
-                  if (g_cfg.name || g_cfg.showDistance) {
-                      NSString *label;
-                      if (g_cfg.name && g_cfg.showDistance) {
-                          label = [NSString stringWithFormat:@"%s [%.0fm]", p->name, p->distance];
-                      } else if (g_cfg.name) {
-                          label = [NSString stringWithUTF8String:p->name];
-                      } else {
-                          label = [NSString stringWithFormat:@"%.0fm", p->distance];
-                      }
-                      if (label) CFText(label, CGPointMake(p->screen[0], box.origin.y - 16.0f), g_cfg.fontScale, col);
+          static void cf_gather(void) { g_playerCount=0; }
+          static void cf_render(void) {
+              CGSize ss=[UIScreen mainScreen].bounds.size;
+              for(int i=0;i<g_playerCount&&i<CF_MAX_PLAYERS;i++){
+                  CFPlayer *p=&g_players[i];
+                  if(!p->valid||p->dead||p->local)continue;
+                  if(g_cfg.teamCheck&&cf_isteam(p->team))continue;
+                  if(g_cfg.visibleCheck&&!p->visible)continue;
+                  if(p->screen[2]<=0||p->distance>g_cfg.maxDistance)continue;
+                  float w=60/p->distance,h=w*2; if(w<18)w=18; if(h<40)h=40;
+                  CGRect box=CGRectMake(p->screen[0]-w/2,p->screen[1]-h,w,h);
+                  int *col=g_cfg.colorEnemy;
+                  if(g_cfg.visibleCheck)col=p->visible?g_cfg.colorVisible:g_cfg.colorHidden;
+                  if(g_cfg.teamCheck&&cf_isteam(p->team))col=g_cfg.colorTeam;
+                  if(g_cfg.box){if(g_cfg.corner)cf_corner(box,1.5f,col);else cf_box(box,1.5f,col);}
+                  if(g_cfg.health)cf_hpbar(CGRectMake(box.origin.x-6,box.origin.y,3,h),p->health,p->maxHealth);
+                  if(g_cfg.snapline)cf_line(CGPointMake(p->screen[0],p->screen[1]),CGPointMake(ss.width/2,ss.height),1,col);
+                  if(g_cfg.head&&p->headScreen[2]>0)cf_head(CGPointMake(p->headScreen[0],p->headScreen[1]),w*.3f,col);
+                  if(g_cfg.name||g_cfg.showDistance){
+                      NSString *l=nil;
+                      if(g_cfg.name&&g_cfg.showDistance)l=[NSString stringWithFormat:@"%s [%.0fm]",p->name,p->distance];
+                      else if(g_cfg.name)l=[NSString stringWithUTF8String:p->name];
+                      else l=[NSString stringWithFormat:@"%.0fm",p->distance];
+                      if(l)cf_text(l,CGPointMake(p->screen[0],box.origin.y-14),1,col);
                   }
               }
           }
-
-          static void CFDrawHud(void) {
-              CGContextRef ctx = UIGraphicsGetCurrentContext();
-              if (!ctx) return;
-              CGSize s = [UIScreen mainScreen].bounds.size;
-              int green[4] = { 0, 255, 120, 200 };
-              CFLine(CGPointMake(s.width * 0.5f - 12.0f, s.height * 0.5f),
-                     CGPointMake(s.width * 0.5f - 4.0f, s.height * 0.5f), 1.0f, green);
-              CFLine(CGPointMake(s.width * 0.5f + 4.0f, s.height * 0.5f),
-                     CGPointMake(s.width * 0.5f + 12.0f, s.height * 0.5f), 1.0f, green);
-              CFLine(CGPointMake(s.width * 0.5f, s.height * 0.5f - 12.0f),
-                     CGPointMake(s.width * 0.5f, s.height * 0.5f - 4.0f), 1.0f, green);
-              CFLine(CGPointMake(s.width * 0.5f, s.height * 0.5f + 4.0f),
-                     CGPointMake(s.width * 0.5f, s.height * 0.5f + 12.0f), 1.0f, green);
-
-              int white[4] = { 255, 255, 255, 220 };
-              NSString *hud = [NSString stringWithFormat:@"CFPlugin v1.0  |  players: %d", g_playerCount];
-              UIFont *font = [UIFont boldSystemFontOfSize:13.0f];
-              [hud drawAtPoint:CGPointMake(16.0f, 24.0f) withAttributes:@{
-                  NSFontAttributeName: font,
-                  NSForegroundColorAttributeName: [UIColor colorWithRed:white[0]/255.0f
-                                                                  green:white[1]/255.0f
-                                                                   blue:white[2]/255.0f
-                                                                  alpha:white[3]/255.0f]
-              }];
+          static void cf_hud(void) {
+              CGSize s=[UIScreen mainScreen].bounds.size;
+              int g[]={0,255,120,200};
+              cf_line(CGPointMake(s.width/2-12,s.height/2),CGPointMake(s.width/2-4,s.height/2),1,g);
+              cf_line(CGPointMake(s.width/2+4,s.height/2),CGPointMake(s.width/2+12,s.height/2),1,g);
+              cf_line(CGPointMake(s.width/2,s.height/2-12),CGPointMake(s.width/2,s.height/2-4),1,g);
+              cf_line(CGPointMake(s.width/2,s.height/2+4),CGPointMake(s.width/2,s.height/2+12),1,g);
+              NSString *h=[NSString stringWithFormat:@"CFPlugin v2 | players:%d",g_playerCount];
+              int w[]={255,255,255,220};
+              cf_text(h,CGPointMake(16,24),1,w);
           }
 
-          @interface CFOverlayView : UIView
-          @end
-
-          @implementation CFOverlayView
-
-          - (instancetype)initWithFrame:(CGRect)frame {
-              self = [super initWithFrame:frame];
-              if (self) {
-                  self.backgroundColor = [UIColor clearColor];
-                  self.opaque = NO;
-                  self.userInteractionEnabled = NO;
-              }
+          @interface CFOverlay : UIView @end
+          @implementation CFOverlay
+          - (id)initWithFrame:(CGRect)f {
+              self=[super initWithFrame:f];
+              if(self){self.backgroundColor=[UIColor clearColor];self.opaque=NO;self.userInteractionEnabled=NO;}
               return self;
           }
-
-          - (void)drawRect:(CGRect)rect {
-              if (!g_cfg.enabled) return;
-              CFGatherPlayers();
-              CFRenderEsp();
-              CFDrawHud();
+          - (void)drawRect:(CGRect)r {
+              if(!g_cfg.enabled)return;
+              cf_gather();
+              cf_render();
+              cf_hud();
           }
-
           @end
 
-          @interface CFDriver : NSObject
-          - (void)tick;
-          @end
-
+          @interface CFDriver : NSObject @end
           @implementation CFDriver
-          - (void)tick {
-              if (g_overlayView) [g_overlayView setNeedsDisplay];
-          }
+          - (void)tick { if(g_overlay) [g_overlay setNeedsDisplay]; }
           @end
 
-          static CFDriver *g_driver = nil;
-
-          static UIWindow *CFFindWindow(void) {
-              UIApplication *app = [UIApplication sharedApplication];
-              UIWindow *win = app.keyWindow;
-              if (!win) {
-                  for (UIWindow *w in app.windows) {
-                      win = w;
-                      break;
+          static void cf_attach(void) {
+              if(g_overlay)return;
+              UIWindow *win=nil;
+              if([[UIApplication sharedApplication] respondsToSelector:@selector(keyWindow)])
+                  win=[[UIApplication sharedApplication] keyWindow];
+              if(!win){
+                  for(UIWindow *w in [[UIApplication sharedApplication] windows]){
+                      win=w; break;
                   }
               }
-              return win;
+              if(!win){
+                  id scene=[[[UIApplication sharedApplication] connectedScenes] anyObject];
+                  if(scene&&[scene respondsToSelector:@selector(keyWindow)])
+                      win=[scene performSelector:@selector(keyWindow)];
+              }
+              if(!win){cf_log(@"no window found, retrying"); return;}
+              cf_log(@"window:%@ root:%@ size:%@",win,win.rootViewController,NSStringFromCGSize(win.bounds.size));
+              g_overlay=[[CFOverlay alloc] initWithFrame:win.bounds];
+              g_overlay.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
+              [win addSubview:g_overlay];
+              [win bringSubviewToFront:g_overlay];
+              CFDriver *drv=[[CFDriver alloc] init];
+              g_link=[CADisplayLink displayLinkWithTarget:drv selector:@selector(tick)];
+              [g_link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+              cf_log(@"overlay attached, frame:%@",NSStringFromCGRect(g_overlay.frame));
           }
 
-          static void CFAttach(void) {
-              if (g_overlayView) return;
-              UIWindow *win = CFFindWindow();
-              if (!win) return;
-
-              g_overlayView = [[CFOverlayView alloc] initWithFrame:win.bounds];
-              g_overlayView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-              [win addSubview:g_overlayView];
-
-              if (!g_driver) g_driver = [[CFDriver alloc] init];
-              g_displayLink = [CADisplayLink displayLinkWithTarget:g_driver selector:@selector(tick)];
-              [g_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-
-              CFLog(@"overlay attached to window: %@ size: %@", win, NSStringFromCGSize(win.bounds.size));
-          }
-
-          static void CFPoll(int attempt) {
-              CFAttach();
-              if (g_overlayView || attempt > 60) {
-                  if (!g_overlayView) CFLog(@"giving up: no window found after %d attempts", attempt);
+          static void cf_poll(int attempt) {
+              cf_attach();
+              if(g_overlay||attempt>120){
+                  if(!g_overlay)cf_log(@"giving up after %d attempts",attempt);
                   return;
               }
-              dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                             dispatch_get_main_queue(), ^{
-                  CFPoll(attempt + 1);
-              });
+              dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{cf_poll(attempt+1);});
+          }
+
+          static void (*orig_didFinish)(id,SEL,id,id);
+          static void swizzle_didFinish(id self, SEL _cmd, id app, id opts) {
+              cf_log(@"didFinishLaunching called on %@",[self class]);
+              if(orig_didFinish) orig_didFinish(self,_cmd,app,opts);
+              dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(3*NSEC_PER_SEC)),dispatch_get_main_queue(),^{cf_poll(0);});
           }
 
           __attribute__((constructor))
-          static void CFPluginInitialize(void) {
-              CFLog(@"constructor running, pid: %d", (int)getpid());
-              dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
-                             dispatch_get_main_queue(), ^{
-                  CFPoll(0);
-              });
+          static void cf_init(void) {
+              cf_log(@"dylib loaded, pid:%d",(int)getpid());
+              const char *candidates[]={"UnityAppController","AppDelegate",NULL};
+              int hooked=0;
+              for(int i=0;candidates[i];i++){
+                  Class cls=objc_getClass(candidates[i]);
+                  if(!cls)continue;
+                  cf_log(@"found class:%s",candidates[i]);
+                  Method m=class_getInstanceMethod(cls,@selector(application:didFinishLaunchingWithOptions:));
+                  if(!m){cf_log(@"no didFinish method on %s",candidates[i]);continue;}
+                  orig_didFinish=(void*)method_getImplementation(m);
+                  method_setImplementation(m,(IMP)swizzle_didFinish);
+                  cf_log(@"hooked %s",candidates[i]);
+                  hooked=1;
+                  break;
+              }
+              if(!hooked){
+                  cf_log(@"no known delegate, fallback poll");
+                  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(3*NSEC_PER_SEC)),dispatch_get_main_queue(),^{cf_poll(0);});
+              }
           }
           CF_EOF
           wc -l src/CFPlugin.m
@@ -352,6 +248,6 @@ jobs:
       - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
-          name: CFPlugin-dylib
+          name: CFPlugin-dylib-v2
           path: CFPlugin.dylib
           retention-days: 30
