@@ -1,4 +1,4 @@
-﻿name: Build CFPlugin v5
+name: Build CFPlugin v6
 
 on:
   workflow_dispatch:
@@ -15,6 +15,8 @@ jobs:
           cat > src/CFPlugin.m << 'EOF'
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
+#import <QuartzCore/QuartzCore.h>
+#include <dispatch/dispatch.h>
 #include <unistd.h>
 
 static UIView *g_overlay = nil;
@@ -34,7 +36,7 @@ static UIView *g_overlay = nil;
 - (void)drawRect:(CGRect)r {
     CGContextRef c = UIGraphicsGetCurrentContext();
     if (!c) return;
-    NSString *txt = [NSString stringWithFormat:@"CF v5 | pid=%d", (int)getpid()];
+    NSString *txt = [NSString stringWithFormat:@"CF v6 | pid=%d", (int)getpid()];
     NSDictionary *attrs = @{
         NSFontAttributeName: [UIFont boldSystemFontOfSize:18],
         NSForegroundColorAttributeName: [UIColor greenColor]
@@ -43,7 +45,7 @@ static UIView *g_overlay = nil;
 }
 @end
 
-void cf_attach(void) {
+static void cf_attach(void) {
     if (g_overlay) return;
     UIWindow *win = nil;
 #pragma clang diagnostic push
@@ -64,24 +66,22 @@ void cf_attach(void) {
     [link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 
-@interface CFLoader : NSObject
-@end
-@implementation CFLoader
-+ (void)load {
+__attribute__((constructor))
+static void cf_init(void) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC),
                    dispatch_get_main_queue(), ^{
-        for (int i=0;i<60&&!g_overlay;i++) {
+        for (int i = 0; i < 60 && !g_overlay; i++) {
             usleep(500000);
             dispatch_async(dispatch_get_main_queue(), ^{ cf_attach(); });
         }
     });
 }
-@end
 EOF
           echo "Source: $(wc -l < src/CFPlugin.m) lines"
 
       - name: Compile
         run: |
+          set -x
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           xcrun --sdk iphoneos clang -dynamiclib -arch arm64 \
             -isysroot "$SDK" \
@@ -89,13 +89,15 @@ EOF
             -fobjc-arc -O2 \
             -framework UIKit -framework Foundation -framework QuartzCore \
             -install_name @executable_path/CFPlugin.dylib \
+            -fmessage-length=0 \
             -o CFPlugin.dylib src/CFPlugin.m
           ls -lh CFPlugin.dylib
           xcrun --sdk iphoneos otool -hv CFPlugin.dylib || true
+          xcrun --sdk iphoneos otool -L CFPlugin.dylib || true
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: CFPlugin-v5
+          name: CFPlugin-v6
           path: CFPlugin.dylib
           retention-days: 30
