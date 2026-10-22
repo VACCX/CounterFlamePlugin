@@ -1568,6 +1568,6 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: CFPlugin-v21
+          name: CFPlugin-v22
           path: CFPlugin.dylib
           retention-days: 30
